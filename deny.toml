@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright (c) 2026 hxyulin <hxyulin@proton.me>
+[graph]
+all-features = true
+
+[advisories]
+ignore = [
+    # rclrs 0.8 requires async-std 1.13. Maintenance-only, no fixed version or
+    # feature to select another runtime. Revisit on the next rclrs upgrade.
+    "RUSTSEC-2025-0052",
+]
+
+[licenses]
+confidence-threshold = 0.8
+allow = ["Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "CC0-1.0", "ISC", "MIT", "MIT-0", "Unicode-3.0", "Zlib"]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

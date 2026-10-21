@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright (c) 2026 hxyulin <hxyulin@proton.me>
+[package]
+name = "mid360-sim"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Deterministic MID-360 scan approximation with a scene-query interface and optional rclrs publishing"
+repository = "https://github.com/hxyulin/mid360-sim"
+publish = false
+
+[features]
+default = []
+ros2 = ["dep:rclrs", "dep:anyhow", "dep:clap"]
+
+[dependencies]
+rclrs = { version = "=0.8.0", optional = true }
+anyhow = { version = "1", optional = true }
+clap = { version = "4.6", features = ["derive"], optional = true }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"
+
+[[bin]]
+name = "mid360-sim"
+path = "src/main.rs"
+required-features = ["ros2"]
