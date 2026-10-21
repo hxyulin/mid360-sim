@@ -159,6 +159,39 @@ try:
     except ValueError as error:
         assert "PointInstancer" in str(error)
     stage.RemovePrim("/World/Instances")
+    # Deferred readback must retain each query's scene, not the final scene.
+    first = sensor.scan(200, 200, pose)
+    sensor.scan(200, 200, pose, defer_readback=True)
+    box.GetOrderedXformOps()[0].Set(Gf.Vec3d(0.1, 0, 0))
+    sensor.scan(400, 200, pose, defer_readback=True)
+    combined = sensor.flush()
+    second = sensor.scan(400, 200, pose)
+    np.testing.assert_allclose(combined.ranges_m[:200], first.ranges_m, atol=1e-5)
+    np.testing.assert_allclose(combined.ranges_m[200:], second.ranges_m, atol=1e-5)
+    np.testing.assert_array_equal(combined.indices, np.arange(200, 600))
+    saved = combined.ranges_m.copy()
+    sensor.scan(600, 200, pose, defer_readback=True)
+    try:
+        sensor.scan(0, 200, pose)
+        raise AssertionError("mixed pending/immediate scan accepted")
+    except ValueError:
+        pass
+    sensor.flush()
+    assert sensor.flush() is None
+    np.testing.assert_array_equal(combined.ranges_m, saved)
+    box.GetOrderedXformOps()[0].Set(Gf.Vec3d(0, 0, 0))
+    parent_op = UsdGeom.Xformable(stage.GetPrimAtPath("/World")).AddTranslateOp()
+    unchanged = sensor.scan(0, 200, pose)
+    parent_op.Set(Gf.Vec3d(0.2, 0, 0))
+    changed_parent = sensor.scan(0, 200, pose)
+    assert not np.array_equal(unchanged.ranges_m, changed_parent.ranges_m)
+    parent_op.Set(Gf.Vec3d(0, 0, 0))
+    # Growing a queued buffer preserves the already queried prefix.
+    sensor.scan(0, 12000, pose, defer_readback=True)
+    sensor.scan(12000, 12000, pose, defer_readback=True)
+    grown = sensor.flush()
+    expected = sensor.scan(0, 24000, pose)
+    np.testing.assert_array_equal(grown.ranges_m, expected.ranges_m)
     # Exercise the actual Kit extension on the simulation timeline, including
     # paused time and STOP/reset, not just direct Python backend calls.
     stage.RemovePrim("/World/Near")
@@ -200,7 +233,7 @@ try:
         median_ms=statistics.median(durations),
         p95_ms=float(np.percentile(durations, 95)),
         max_reference_vector_difference=max(errors),
-        checks="GPU enclosure intersections, Rust fixtures, long-cycle wrap, chunk/stride invariance, dynamic transforms, near-hit occlusion, rolling sensor translation/rotation, nonuniform scale, combined triangle mesh BVH, Kit extension acquisition/pause/reset",
+        checks="GPU enclosure intersections, Rust fixtures, long-cycle wrap, chunk/stride invariance, dynamic transforms, near-hit occlusion, rolling sensor translation/rotation, nonuniform scale, combined triangle mesh BVH, deferred readback ownership/growth/moving geometry/ancestor invalidation, Kit extension acquisition/pause/reset",
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n")

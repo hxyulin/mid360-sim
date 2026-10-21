@@ -14,14 +14,20 @@ from .backend import Mid360Sensor
 _ACTIVE = None
 
 
-def create_sensor(stage, path="/World/Mid360", roots=("/World",), exclude=()):
+def create_sensor(
+    stage, path="/World/Mid360", roots=("/World",), exclude=(), batch_steps=1
+):
     """Create an opt-in sensor Xform; configure before starting the timeline.
 
     Attaching the prim beneath a robot mounts it to that robot. Optical roots
     select actual visible triangle meshes/cubes, not PhysX collision proxies.
+    batch_steps (1..100) delays host output while keeping per-step queries.
     """
+    if not isinstance(batch_steps, int) or not 1 <= batch_steps <= 100:
+        raise ValueError("batch_steps must be in 1..100")
     prim = UsdGeom.Xform.Define(stage, path).GetPrim()
     for key, typ, value in [
+        ("mid360:batchSteps", Sdf.ValueTypeNames.Int, batch_steps),
         ("mid360:enabled", Sdf.ValueTypeNames.Bool, True),
         ("mid360:roots", Sdf.ValueTypeNames.StringArray, list(roots)),
         ("mid360:exclude", Sdf.ValueTypeNames.StringArray, list(exclude)),
@@ -33,7 +39,7 @@ def create_sensor(stage, path="/World/Mid360", roots=("/World",), exclude=()):
 
 
 def latest_frame(path="/World/Mid360"):
-    """Latest caller-readable frame, or None before acquisition; no history queue."""
+    """Latest completed host frame, or None before readback; no history queue."""
     return None if _ACTIVE is None else _ACTIVE.frames.get(path)
 
 
@@ -55,7 +61,9 @@ class Extension(omni.ext.IExt):
         self.sensors = {}
         self.frames = {}
         self.previous = {}
-        self.elapsed_s = 0.0
+        self.batch_steps = {}
+        self.batch_counts = {}
+        self.elapsed_ns = 0
         self.next_index = 0
         self._step = omni.physx.get_physx_interface().subscribe_physics_on_step_events(
             self._on_step, False, 100
@@ -76,7 +84,9 @@ class Extension(omni.ext.IExt):
         self.sensors.clear()
         self.frames.clear()
         self.previous.clear()
-        self.elapsed_s = 0.0
+        self.batch_steps.clear()
+        self.batch_counts.clear()
+        self.elapsed_ns = 0
         self.next_index = 0
 
     def _on_stage(self, event):
@@ -109,9 +119,15 @@ class Extension(omni.ext.IExt):
                         max_range_m=float(prim.GetAttribute("mid360:maxRangeM").Get()),
                     )
                     self.previous[path] = _pose(stage, path)
-        begin_ns = round(self.elapsed_s * 1e9)
-        self.elapsed_s += dt
-        end_ns = round(self.elapsed_s * 1e9)
+                    attr = prim.GetAttribute("mid360:batchSteps")
+                    batch_steps = attr.Get() if attr else 1
+                    if not isinstance(batch_steps, int) or not 1 <= batch_steps <= 100:
+                        raise ValueError("mid360:batchSteps must be in 1..100")
+                    self.batch_steps[path] = batch_steps
+                    self.batch_counts[path] = 0
+        begin_ns = self.elapsed_ns
+        self.elapsed_ns += round(dt * 1e9)
+        end_ns = self.elapsed_ns
         until = (end_ns + 4999) // 5000
         count = until - self.next_index
         for path, sensor in self.sensors.items():
@@ -128,9 +144,13 @@ class Extension(omni.ext.IExt):
                 q = Gf.Slerp(f, qa, qb)
                 poses.append((position, (*q.GetImaginary(), q.GetReal())))
             if count > 0:
-                self.frames[path] = sensor.scan(
-                    self.next_index, count, poses[0], poses[1]
+                sensor.scan(
+                    self.next_index, count, poses[0], poses[1], defer_readback=True
                 )
+                self.batch_counts[path] += 1
+                if self.batch_counts[path] >= self.batch_steps[path]:
+                    self.frames[path] = sensor.flush()
+                    self.batch_counts[path] = 0
             self.previous[path] = current
         self.next_index = until
 
@@ -142,4 +162,6 @@ class Extension(omni.ext.IExt):
         self.sensors.clear()
         self.frames.clear()
         self.previous.clear()
+        self.batch_steps.clear()
+        self.batch_counts.clear()
         _ACTIVE = None

@@ -9,11 +9,13 @@ No optical material/noise/IMU calibration is claimed by this geometry-only backe
 
 from dataclasses import dataclass
 import json
+import math
+import weakref
 from pathlib import Path
 
 import numpy as np
 import warp as wp
-from pxr import Usd, UsdGeom
+from pxr import Usd, UsdGeom, Tf, Sdf
 
 MODEL = json.loads(Path(__file__).with_name("nominal.json").read_text())
 CYCLE_GROUPS = wp.constant(MODEL["groups_per_cycle"])
@@ -66,6 +68,7 @@ def query_scan(
     first: wp.int64,
     stride: int,
     count: int,
+    output_offset: int,
     terms: wp.array(dtype=wp.int32),
     coefficients: wp.array(dtype=wp.float32),
     mesh: wp.uint64,
@@ -78,7 +81,7 @@ def query_scan(
 ):
     i = wp.tid()
     d = nominal_direction(first + wp.int64(i) * wp.int64(stride), terms, coefficients)
-    directions[i] = d
+    directions[output_offset + i] = d
     fraction = float(i) / float(wp.max(count - 1, 1))
     position = wp.lerp(
         wp.transform_get_translation(pose_start),
@@ -92,9 +95,9 @@ def query_scan(
     )
     direction = wp.quat_rotate(rotation, d)
     result = wp.mesh_query_ray(mesh, position, direction, max_range)
-    ranges[i] = -1.0
+    ranges[output_offset + i] = -1.0
     if result.result and result.t >= min_range:
-        ranges[i] = result.t
+        ranges[output_offset + i] = result.t
 
 
 @dataclass
@@ -301,6 +304,36 @@ class Mid360Sensor:
         self.transforms = wp.empty(len(self.paths), dtype=wp.mat44, device=device)
         self.world_points = wp.empty(offset, dtype=wp.vec3, device=device)
         self._last_transforms = None
+        self._transforms_dirty = True
+        # Instance-prototype edits need broader dependency tracking; retain the
+        # conservative per-query capture for any instance proxy in this scene.
+        self._cache_transforms = not any(
+            stage.GetPrimAtPath(p).IsInstanceProxy() for p in self.paths
+        )
+        self._transform_ancestors = set()
+        for path in self.paths:
+            path = Sdf.Path(path)
+            while path.pathElementCount > 0:
+                self._transform_ancestors.add(path)
+                path = path.GetParentPath()
+        self._transform_ancestors.add(Sdf.Path.absoluteRootPath)
+        owner_ref = weakref.ref(self)
+
+        def scene_changed(notice, sender):
+            owner = owner_ref()
+            if owner is not None:
+                for path in (
+                    *notice.GetResyncedPaths(),
+                    *notice.GetChangedInfoOnlyPaths(),
+                ):
+                    if path.GetPrimPath() in owner._transform_ancestors:
+                        owner._transforms_dirty = True
+                        break
+
+        self._scene_changed_callback = scene_changed
+        self._scene_notice = Tf.Notice.Register(
+            Usd.Notice.ObjectsChanged, scene_changed, stage
+        )
         self.mesh = None
         self.sync_transforms()
         self.mesh = wp.Mesh(
@@ -318,9 +351,12 @@ class Mid360Sensor:
             device=device,
         )
         self.capacity = 0
+        self._pending_count = 0
 
     def sync_transforms(self):
         """Capture current USD transforms; caller must synchronize physics to USD."""
+        if self._cache_transforms and not self._transforms_dirty:
+            return
         cache = UsdGeom.XformCache()
         matrices = []
         for path in self.paths:
@@ -350,6 +386,7 @@ class Mid360Sensor:
             if self.mesh is not None:
                 self.mesh.refit()
             self._last_transforms = matrices
+        self._transforms_dirty = False
 
     def scan(
         self,
@@ -359,11 +396,17 @@ class Mid360Sensor:
         pose_end=None,
         epoch_ns=0,
         stride=1,
+        defer_readback=False,
     ):
         """Query explicit emissions; poses are (metre translation, xyzw quaternion).
 
         Poses correspond to first/last selected emissions, not frame boundaries.
         No wall clock or hidden acquisition index is used. Noise is currently off.
+        With defer_readback=True, queue queries on the GPU and return None;
+        flush() returns one owned host frame for contiguous queued emissions.
+        Each query still captures this step's geometry and interpolated poses.
+        At most 200,000 rays may be pending. Never mix immediate scans with a
+        pending batch; flush it first. No scene/pose history is approximated.
         """
         if (
             not all(isinstance(v, int) for v in [first_index, count, stride, epoch_ns])
@@ -384,16 +427,39 @@ class Mid360Sensor:
             if (
                 len(position) != 3
                 or len(rotation) != 4
-                or not np.isfinite([*position, *rotation]).all()
-                or not np.isclose(np.linalg.norm(rotation), 1.0, atol=1e-5)
+                or not all(math.isfinite(v) for v in (*position, *rotation))
+                or not math.isclose(
+                    sum(v * v for v in rotation), 1.0, rel_tol=2e-5, abs_tol=2e-5
+                )
             ):
                 raise ValueError("invalid pose; need a unit xyzw quaternion")
             poses.append(wp.transform(position, rotation))
+        pending = self._pending_count
+        if pending and (
+            not defer_readback
+            or first_index != self._pending_first + pending * self._pending_stride
+            or stride != self._pending_stride
+            or epoch_ns != self._pending_epoch
+        ):
+            raise ValueError(
+                "flush pending contiguous emissions before changing windows"
+            )
+        needed = pending + count
+        if needed > 200000:
+            raise ValueError("pending GPU batch exceeds 200000 rays; flush first")
         self.sync_transforms()
-        if count > self.capacity:
-            self.capacity = count
-            self.directions = wp.empty(count, dtype=wp.vec3, device=self.device)
-            self.ranges = wp.empty(count, dtype=wp.float32, device=self.device)
+        if needed > self.capacity:
+            capacity = max(
+                needed,
+                min(200000, max(self.capacity * 2, 20000 if defer_readback else count)),
+            )
+            directions = wp.empty(capacity, dtype=wp.vec3, device=self.device)
+            ranges = wp.empty(capacity, dtype=wp.float32, device=self.device)
+            if pending:
+                wp.copy(directions, self.directions, count=pending)
+                wp.copy(ranges, self.ranges, count=pending)
+            self.capacity = capacity
+            self.directions, self.ranges = directions, ranges
         wp.launch(
             query_scan,
             dim=count,
@@ -401,6 +467,7 @@ class Mid360Sensor:
                 wp.int64(first_index),
                 stride,
                 count,
+                pending,
                 self.terms,
                 self.coefficients,
                 self.mesh.id,
@@ -412,15 +479,36 @@ class Mid360Sensor:
             ],
             device=self.device,
         )
+        if not pending:
+            self._pending_first, self._pending_stride, self._pending_epoch = (
+                first_index,
+                stride,
+                epoch_ns,
+            )
+        self._pending_count = needed
+        return None if defer_readback else self.flush()
+
+    def flush(self):
+        """Read queued rays into one owned host frame; None if no rays are pending.
+
+        Query launches and mesh refits share Warp's current stream. Readback
+        waits for those queries, preserving each step's captured geometry even
+        when later steps move it. No scene mutation may race this stream.
+        """
+        count = self._pending_count
+        if not count:
+            return None
         # CUDA .numpy() owns a synchronized host copy. CPU arrays need copying.
-        directions = self.directions.numpy()[:count]
-        ranges = self.ranges.numpy()[:count]
+        directions = self.directions[:count].numpy()
+        ranges = self.ranges[:count].numpy()
         if self.device == "cpu":
             directions, ranges = directions.copy(), ranges.copy()
-        return ScanFrame(
-            first_index,
-            stride,
-            epoch_ns,
+        frame = ScanFrame(
+            self._pending_first,
+            self._pending_stride,
+            self._pending_epoch,
             directions,
             ranges,
         )
+        self._pending_count = 0
+        return frame

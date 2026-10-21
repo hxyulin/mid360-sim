@@ -119,3 +119,62 @@ time-offset sensitivity, bootstrap interval and paired per-cloud statistics.
 `evaluation.npz` retains sampled points, masks and candidate transforms for
 plotting. Final local results and PNG/SVG plots are in ignored
 `local-assets/motion-ground-truth/comparison-v3/`.
+
+## Cheap interpolation follow-up
+
+A decomposition of the same higher-motion sample attributes 1.858 mm RMS to
+orientation approximation alone and 0.135 mm to translation alone. These are
+separate counterfactuals, not independent variances to add. Baseline RMS grows
+with return range: 0.804 mm at 0.5–2 m, 1.957 mm at 2–5 m and 2.949 mm at 5–15 m.
+
+All baseline squared error is in acquisition intervals that cross a reference
+MoCap knot (77.7% of these points). Away from those knots, the reference itself
+is already linear/SLERP, so the baseline reproduces it exactly. This makes the
+1.9 mm strongly dependent on the chosen reference interpolation and sampled
+tracking noise; it is not a measured simulator numerical defect.
+
+A causal three-pose quadratic orientation estimate needs one additional
+historical pose and the already available interval endpoints. In start-local
+rotation-log coordinates, blend half its curvature correction into SLERP. An
+alignment guard falls back to SLERP if previous/current angular increments do
+not have a positive dot product. Translation stays linear.
+
+| Exploratory 128 Hz policy | Higher-motion RMS | p95 | Maximum | Real-floor RMS |
+|---|---:|---:|---:|---:|
+| Baseline | 1.860 mm | 3.637 mm | 29.184 mm | 61.565 mm |
+| Half orientation curvature | 1.636 mm | 3.182 mm | 24.004 mm | 61.628 mm |
+| Guarded half curvature | 1.620 mm | 3.104 mm | 24.004 mm | 61.620 mm |
+
+The guarded candidate lowers RMS by 12.9% (0.240 mm), improving 110 of 124
+higher-motion clouds. This is exploratory reuse of an already inspected
+held-out set; it is not new independent validation. Four fixed grid phases
+are also evaluated rather than optimizing an alignment to the GT clock.
+No callback scheduling, input timestamps, optical model or simulator runtime
+has been changed. No native GPU throughput result is claimed for the candidate.
+
+Controlled fixed-axis acceleration at 720 deg/s² halves the interpolation
+error with the half correction (0.700 → 0.350 mm RMS at 10 m). But a stop exactly
+at the interval boundary reveals unguarded overshoot: 15.34 mm peak versus zero
+baseline error. The guard removes that particular stop artifact; it is not a
+proof of safety under arbitrary impacts, reversals or changing rotation axes.
+
+Keep the release runtime default. The numerical gain is small compared with
+recording uncertainty, and real-floor residual does not improve. A future
+opt-in implementation should validate abrupt dynamics, coherent moving scene
+geometry and actual per-ray GPU cost before becoming a default. Preserving
+existing capture knots can avoid unnecessary resampling, but aligning to this
+recording's approximately 100 Hz GT is not a general physical improvement.
+
+Reproduce without downloading or decoding the bag again:
+
+```sh
+python scripts/investigate-motion-interpolation.py \
+  local-assets/motion-ground-truth/comparison-v3/evaluation.npz \
+  /path/EIL_Mask2.txt --output local-assets/motion-ground-truth/new-interpolation.json
+python -W error scripts/test-motion-comparison.py
+```
+
+The report includes decomposition, range bins, inherited train/evaluation masks,
+per-cloud improvement counts, grid phases, floor residuals and controlled cases.
+The added math regressions cover stop fallback, smooth acceleration, endpoints
+and quaternion-sign invariance. The default runtime continues to use SLERP.

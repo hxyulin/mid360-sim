@@ -6,6 +6,17 @@
 
 ### Integrations
 
+- Batch Isaac GPU readback independently of physics-step acquisition, cache
+  unchanged USD geometry transforms, and reduce per-query Python allocations.
+  Keep immediate output as the default and bound deferred GPU storage.
+- Avoid NumPy group sorting for consecutive MuJoCo emissions while retaining
+  the same nominal directions and decimated-scan behavior.
+- Quantize Isaac callback durations to integer nanoseconds before advancing
+  emission boundaries, avoiding spurious boundary rays from float32 step times.
+
+- Add live 1 kHz MuJoCo/Isaac acquisition benchmarks with moving mounts,
+  physics-only baselines, 200 rays per step and 100 ms output aggregation.
+
 - Extract the standalone Rust scene-query library from rm-simulator, retaining
   measurement and interface provenance with no default runtime dependencies.
 - Add optional rclrs / ROS 2 Jazzy publishing, a Pixi/RoboStack environment and
@@ -26,6 +37,10 @@
 - Support explicit sensor mounting tilt in the analytic room demo.
 
 ### Evidence
+
+- Investigate inexpensive orientation-curvature interpolation against recorded
+  MoCap; document modest gains, knot dependence and abrupt-stop regressions
+  while preserving the runtime default.
 
 - Analyze a 300-second stationary capture, fit learned optics/clock profiles,
   and document withheld-data errors and measured-clock conditioning.

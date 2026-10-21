@@ -92,3 +92,35 @@ controlled CPU/GPU comparison with the different Talos Isaac benchmark.
 See [MuJoCo's native ray API](https://mujoco.readthedocs.io/en/stable/APIreference/APIfunctions.html#mj-multiray)
 for engine semantics. MuJoCo/NumPy remain separately installed dependencies;
 no engine implementation code or recorded points are vendored.
+
+### Physics-step acquisition benchmark
+
+To exercise motion-aware 1 ms acquisition instead of the large-batch microbenchmark:
+
+```sh
+PYTHONPATH=integrations/python python integrations/python/benchmark_realtime.py \
+  --steps 2000 --output local-assets/realtime/mujoco.json
+```
+
+This runs the existing sensor against a translating/rotating free body in a
+six-wall room, queries 200 rays after each 1 ms physics step, refreshes mounted
+transforms after integration, and assembles transport-free 100 ms output arrays.
+It compares a physics/capture-only baseline against sensor-enabled stepping.
+Warmup is excluded; original emission indices, offsets, point counts and mount
+motion are checked. Reports include real-time factor, step median/p95 and the
+number of steps exceeding 1 ms. There is no sleeping, rendering, ROS or network
+publication. These are throughput/deadline diagnostics, not a hard real-time
+scheduler guarantee or a detailed-arena benchmark.
+
+On Axiom (Apple M5 Max, MuJoCo 3.7.0), a 10-second simulated run processed
+2,000,000 rays into 100 frames in 0.982 s wall time: **10.19× real time**.
+The physics-only baseline took 0.0262 s. Sensor-enabled steps had a 0.0963 ms
+median and 0.1119 ms p95, with no measured step exceeding 1 ms. This includes
+Python checks and array aggregation, but not DDS/network publication.
+
+Consecutive emissions now derive their four-lane group mapping directly instead
+of using NumPy's general sorting/inverse operation. In three alternating
+10-second before/after runs on the same machine/process, median wall time fell
+from 0.8230 s to 0.7804 s (5.2% less runtime). Odd starts/counts, cycle boundaries
+and decimated queries are checked for identical directions. Timing remains a
+simple-room result, not an estimate for mesh-heavy scenes.

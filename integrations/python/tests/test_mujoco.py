@@ -21,6 +21,12 @@ class MujocoTests(unittest.TestCase):
         mujoco.mj_forward(model, data)
         return model, data, MujocoSensor(model, data, "lidar", **kwargs)
 
+    def test_consecutive_group_fast_path_matches_strided_queries(self):
+        # Odd starts/counts and wrap boundaries exercise lane/group indexing.
+        for first in (0, 1, 3, 199999, MODEL["groups_per_cycle"] * 4 - 3):
+            full = directions(first, 201)
+            np.testing.assert_array_equal(full[::3], directions(first, 67, stride=3))
+
     def test_rust_fixtures_and_long_cycle(self):
         for f in MODEL["reference_rays"]:
             np.testing.assert_allclose(

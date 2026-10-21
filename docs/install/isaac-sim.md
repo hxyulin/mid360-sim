@@ -165,3 +165,87 @@ Maximum sampled GPU/Rust direction vector difference was 8.05e-7. The final
 report/log are retained in ignored `local-assets/isaac-validation/` in the
 source checkout and in the remote `results/headless-validated.json` / host
 `workspace/mid360-sim-headless-validated.log`.
+
+### Physics-step acquisition benchmark
+
+Run the actual extension callback at 1 kHz, rather than only timing large GPU batches:
+
+```sh
+./python.sh /path/mid360-sim/integrations/isaac-sim/tests/realtime.py \
+  --steps 2000 --output /writable/path/realtime.json
+```
+
+The headless test steps PhysX at 1 ms with a translating/rotating USD rigid-body
+mount, first without sensing and then with the existing extension's post-step
+callback. Sleeping is disabled for the mount. Each callback acquires 200 rays;
+transport-free output arrays are combined into 100 ms frames. Warmup, initial
+BVH construction and shader startup are excluded. It verifies mount motion,
+callback emission continuity, per-step counts and completed-frame offsets, and
+reports real-time factor, step median/p95 and steps exceeding 1 ms. Rendering,
+ROS and network publication are excluded. The two runs continue the same body
+trajectory through a simple static enclosure; they are not identical scene
+captures or a detailed-arena benchmark. Require a report containing `checks`;
+Isaac fast shutdown can mask failures in the process exit status.
+
+On Talos (Isaac Sim 6.2.0, RTX 5090), a 10-second simulated run processed
+2,000,000 rays into 100 frames in 9.315 s wall time: **1.074× real time**.
+The physics-only baseline took 3.390 s. Sensor-enabled steps had a 0.920 ms
+median and 1.044 ms p95; 1,357 of 10,000 steps exceeded 1 ms. Average throughput
+kept up in this simple enclosure, but individual deadlines were not guaranteed.
+The result includes callback/USD synchronization and host array costs, unlike
+the large-batch GPU microbenchmark. It excludes rendering and DDS/network
+publication. Raw reports/logs are retained in ignored `local-assets/realtime/`.
+
+### Batched readback without coarser acquisition
+
+Use `create_sensor(..., batch_steps=10)` to return a host frame every ten
+physics callbacks, or `batch_steps=100` for a 100 ms frame at 1 kHz. The
+corresponding USD setting is `mid360:batchSteps` (1–100, default 1); configure
+it before starting. `latest_frame()` retains the last completed frame between
+readbacks. STOP/reset discards incomplete batches. This adds output latency,
+but every physics callback still queries its own captured scene and interpolated
+sensor poses. It does not freeze the scene for the whole publication interval.
+
+Direct backend callers can use `sensor.scan(..., defer_readback=True)` followed
+by `sensor.flush()`. Emissions must be contiguous with matching stride/epoch;
+flush before changing those or switching to immediate scans. Pending storage
+is bounded to 200,000 rays. Queries/refits stay on the same Warp stream, followed
+by synchronized owned host output. Concurrent scene mutation on another stream
+is unsupported. The host reads only the populated output slice.
+
+USD change notices invalidate the cached geometry transforms when source prims
+or their ancestors change; unchanged geometry avoids repeated transform walks.
+Scenes containing instance proxies retain conservative per-query refreshes.
+Topology/deformation changes still require rebuilding the backend. Per-step
+pose validation avoids NumPy array allocations. These changes add no threads
+or second physics world.
+
+Compare the available output intervals using the same 1 ms acquisition test:
+
+```sh
+./python.sh /path/mid360-sim/integrations/isaac-sim/tests/realtime.py \
+  --steps 10000 --batch-steps 10 --output /writable/path/batch10.json
+```
+
+`--batch-steps` accepts 1, 10 or 100. Original point offsets and motion remain
+per emission. Larger batches amortize host synchronization; GPU query kernels
+still run every physics step so moving geometry is captured at that resolution.
+
+Final optimized Talos runs (10 simulated seconds / two million rays each):
+
+| Host readback interval | Wall time | Real-time factor | Step p95 | Steps >1 ms |
+|---|---:|---:|---:|---:|
+| 1 ms | 9.131 s | 1.095× | 1.040 ms | 923 / 10,000 |
+| 10 ms | 6.717 s | 1.489× | 0.969 ms | 363 / 10,000 |
+| 100 ms | 6.187 s | 1.616× | 0.719 ms | 132 / 10,000 |
+
+The pre-optimization 1 ms-readback run took 9.315 s (1.074×). The 100 ms option
+therefore reduced total wall time by 33.6%, or increased throughput by 50.5%, in
+this scene. Its physics-only baseline took 3.364 s; sensor-enabled excess wall
+time was 2.823 s. These are single runs and include host scheduling variance;
+the intervals also trade output latency. Every case retains 1 ms scene capture
+and per-ray sensor-pose interpolation. The regression suite checks retained
+frames, buffer growth, queued queries across moving geometry, ancestor transform
+invalidation, and playback pause/reset. No claim is made for detailed-arena
+performance or a maximum deadline. Use 10 ms readback for lower output latency,
+or 100 ms when publishing at 10 Hz. Raw reports are `local-assets/realtime/final-*.json`.

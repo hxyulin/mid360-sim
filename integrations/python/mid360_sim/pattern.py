@@ -35,9 +35,19 @@ def directions(first_index, count, stride=1):
     """Unit sensor-FLU rays at explicit emission indices, without a per-ray table."""
     validate_window(first_index, count, stride)
     indices = first_index + np.arange(count, dtype=np.uint64) * stride
-    groups, inverse = np.unique(
-        (indices // 4) % MODEL["groups_per_cycle"], return_inverse=True
-    )
+    if stride == 1:
+        # Consecutive emissions already form consecutive four-lane groups.
+        # Avoid sorting/allocating np.unique's general inverse mapping at 1 kHz.
+        lane_offset = first_index % 4
+        group_count = (lane_offset + count + 3) // 4
+        groups = (first_index // 4 + np.arange(group_count, dtype=np.uint64)) % MODEL[
+            "groups_per_cycle"
+        ]
+        inverse = (np.arange(count) + lane_offset) // 4
+    else:
+        groups, inverse = np.unique(
+            (indices // 4) % MODEL["groups_per_cycle"], return_inverse=True
+        )
     spin = (groups * MODEL["spin_hz"] % 50000).astype(float) * (2 * np.pi / 50000)
     sweep = (groups * MODEL["sweep_numerator"] % MODEL["groups_per_cycle"]).astype(
         float

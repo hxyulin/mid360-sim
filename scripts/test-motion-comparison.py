@@ -18,6 +18,13 @@ comparison = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(comparison)
 
 
+spec = importlib.util.spec_from_file_location(
+    "interpolation", Path(__file__).with_name("investigate-motion-interpolation.py")
+)
+interpolation = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(interpolation)
+
+
 class MotionComparisonTests(unittest.TestCase):
     def trajectory(self, path, gap=False):
         times = np.arange(101) * 0.01
@@ -62,6 +69,40 @@ class MotionComparisonTests(unittest.TestCase):
         self.assertLess(abs(residual).max(), 1e-12)
         m = comparison.metrics(np.array([0.003, 0.004]))
         self.assertAlmostEqual(m["rms"], np.sqrt(0.0000125))
+
+
+class InterpolationCandidateTests(unittest.TestCase):
+    def test_smooth_acceleration_and_stop_guard(self):
+        cases = interpolation.controlled()
+        smooth = cases["smooth_acceleration"]
+        self.assertAlmostEqual(
+            smooth["guarded_half_curvature"]["rms"] / smooth["linear"]["rms"],
+            0.5,
+            places=6,
+        )
+        stop = cases["stop_at_boundary"]
+        self.assertEqual(stop["linear"]["max"], 0)
+        self.assertGreater(stop["half_curvature"]["max"], 0.015)
+        self.assertEqual(stop["guarded_half_curvature"]["max"], 0)
+
+    def test_endpoints_and_quaternion_sign_invariance(self):
+        n = 17
+        f = np.linspace(0, 1, n)
+        start = Rotation.from_euler("z", np.zeros(n))
+        prev = Rotation.from_euler("z", np.full(n, -0.02))
+        end = Rotation.from_euler("z", np.full(n, 0.03))
+        result = interpolation.rotation_policy(prev, start, end, f, 0.5, True)
+        self.assertLess((result[0].inv() * start[0]).magnitude(), 1e-12)
+        self.assertLess((result[-1].inv() * end[-1]).magnitude(), 1e-12)
+        flipped = interpolation.rotation_policy(
+            Rotation.from_quat(-prev.as_quat()),
+            start,
+            Rotation.from_quat(-end.as_quat()),
+            f,
+            0.5,
+            True,
+        )
+        np.testing.assert_allclose((result.inv() * flipped).magnitude(), 0, atol=1e-12)
 
 
 if __name__ == "__main__":
