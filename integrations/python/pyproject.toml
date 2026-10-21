@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright (c) 2026 hxyulin <hxyulin@proton.me>
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "mid360-sim-adapters"
+version = "0.1.0"
+description = "MID-360 scan approximation and optional MuJoCo scene adapter"
+readme = "README.md"
+authors = [{name = "hxyulin", email = "hxyulin@proton.me"}]
+requires-python = ">=3.10"
+license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-MIT", "LICENSE-APACHE", "NOTICE.md"]
+dependencies = ["numpy>=2,<3"]
+[project.urls]
+Documentation = "https://hxyulin.github.io/mid360-sim/"
+Repository = "https://github.com/hxyulin/mid360-sim"
+[project.optional-dependencies]
+mujoco = ["mujoco>=3.7,<4"]
+[tool.setuptools.package-data]
+mid360_sim = ["nominal.json"]
+
+[tool.setuptools.packages.find]
+include = ["mid360_sim*"]

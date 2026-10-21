@@ -2,7 +2,7 @@
 // Copyright (c) 2026 hxyulin <hxyulin@proton.me>
 //! Backend-independent acquisitions. Scene queries receive each emission's time;
 //! the caller transforms rays and interpolates moving geometry at that time.
-use crate::pattern::{Mid360Pattern, POINT_INTERVAL_NS};
+use crate::pattern::{POINT_INTERVAL_NS, ScanPattern};
 /// Maximum emissions per acquisition (bounded caller allocation).
 pub const MAX_LIDAR_RAYS: usize = 262_144;
 /// Nearest physical surface; below-minimum hits still occlude farther objects.
@@ -128,13 +128,28 @@ impl Sensor {
             effects,
         })
     }
-    /// Sample global indices `first + i*stride`. Full-rate cadence is 5 us.
+    /// Sample the default nominal profile at `first + i*stride`. Cadence is 5 us.
     /// Overflow and allocation limits are checked before changing `out`.
     /// Backend failures/invalid surfaces are misses; a rejected nearest surface
     /// never exposes a farther one. Odd strides retain all four fitted lanes.
     pub fn sample_into(
         &self,
         scene: &impl Scene,
+        first: u64,
+        count: u32,
+        stride: u32,
+        out: &mut RollingFrame,
+    ) -> Result<(), &'static str> {
+        self.sample_pattern_into(scene, ScanPattern::default(), first, count, stride, out)
+    }
+    /// Sample an explicit nominal, reference, mean-clock or bounded capture profile.
+    /// An unsupported window is rejected before output changes. Other acquisition
+    /// timing, noise and scene-query semantics match [`Self::sample_into`].
+    #[allow(clippy::too_many_arguments)]
+    pub fn sample_pattern_into(
+        &self,
+        scene: &impl Scene,
+        pattern: ScanPattern,
         first: u64,
         count: u32,
         stride: u32,
@@ -149,12 +164,25 @@ impl Sensor {
         last.checked_mul(POINT_INTERVAL_NS)
             .and_then(|t| t.checked_add(self.epoch_ns))
             .ok_or("timestamp overflow")?;
+        if pattern.direction(first).is_none() || pattern.direction(last).is_none() {
+            return Err("acquisition exceeds scan profile duration");
+        }
         out.points.clear();
+        let mut nominal_group = None;
+        let mut nominal_rays = [[0.; 3]; 4];
         for offset in 0..count {
             let index = first + u64::from(offset) * u64::from(stride);
             let time_ns = self.epoch_ns + index * POINT_INTERVAL_NS;
             let e = self.effects;
-            let mut d = Mid360Pattern.direction(index);
+            let mut d = if pattern == ScanPattern::Nominal {
+                if nominal_group != Some(index / 4) {
+                    nominal_rays = crate::hardware::NominalPattern.group_directions(index);
+                    nominal_group = Some(index / 4);
+                }
+                nominal_rays[(index % 4) as usize]
+            } else {
+                pattern.direction(index).expect("validated profile window")
+            };
             if e.angular_sigma_rad > 0. {
                 let a = d[1].atan2(d[0]);
                 let z = d[2];
@@ -224,6 +252,44 @@ mod tests {
                 reflectance: 1.,
             })
         }
+    }
+    #[test]
+    fn capture_profile_preserves_chunking_and_rejects_overrun_atomically() {
+        let s = Sensor::new(
+            0.1,
+            40.,
+            10,
+            Effects {
+                range_sigma_m: 0.02,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let mut all = RollingFrame::default();
+        let mut a = RollingFrame::default();
+        let mut b = RollingFrame::default();
+        let p = ScanPattern::HardwareCapture;
+        s.sample_pattern_into(&Surface(10.), p, 7, 1000, 3, &mut all)
+            .unwrap();
+        s.sample_pattern_into(&Surface(10.), p, 7, 400, 3, &mut a)
+            .unwrap();
+        s.sample_pattern_into(&Surface(10.), p, 1207, 600, 3, &mut b)
+            .unwrap();
+        a.points.append(&mut b.points);
+        assert_eq!(all, a);
+        let original = all.clone();
+        assert!(
+            s.sample_pattern_into(
+                &Surface(10.),
+                p,
+                crate::hardware::LAST_CAPTURE_SAMPLE,
+                2,
+                1,
+                &mut all
+            )
+            .is_err()
+        );
+        assert_eq!(original, all);
     }
     #[test]
     fn chunk_and_stride_invariant_noise() {

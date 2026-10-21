@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright (c) 2026 hxyulin <hxyulin@proton.me>
+# Python 3.9-3.12; development analysis only, no Rust/runtime dependencies.
+numpy==2.0.2
+scipy==1.13.1
+matplotlib==3.9.4
+# Needed by the external TriLIO Decoder's message helper imports.
+mcap-ros2-support==0.6.0
+rosbags==0.9.23

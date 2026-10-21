@@ -25,3 +25,16 @@ cross-platform lockfile. Keep the scoped async-std maintenance exception explici
 
 Commits use `type(scope): summary` with an imperative subject <=72 characters.
 Update CHANGELOG.md for user-visible changes. Do not publish without user intent.
+
+
+## Documentation and distribution
+
+User guides live in `docs/guide/` and `docs/install/`; integration READMEs link
+there. The VitePress site uses `/mid360-sim/` and is built with `pnpm docs:build`
+and checked with `pnpm docs:check`. Keep research evidence distinct from install
+steps. `scripts/check-repository.py` validates versions, model exports and Python
+license copies. Release tools use Python 3.12 and `requirements-release.txt`.
+`scripts/package-release.py` writes local checksummed artifacts only; it requires
+a clean tree unless `--allow-dirty` explicitly marks a local preview. Inspect with
+`scripts/check-release.py`. Version tags create draft releases, not registry
+publication. Never package ignored datasets, runtime installs or private decoders.

@@ -4,6 +4,9 @@
 //! The optional `ros2` feature enables rclrs and requires a sourced ROS installation.
 //! Measured points remain in each emission's sensor frame; no truth pose is sent.
 mod coefficients;
+pub mod hardware;
+mod hardware_data;
+mod nominal_data;
 pub mod pattern;
 pub mod sensor;
 use sensor::{MAX_LIDAR_RAYS, RollingFrame};

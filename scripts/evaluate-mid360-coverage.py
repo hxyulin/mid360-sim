@@ -6,6 +6,7 @@ Percentages measure visited one-degree angular cells, without scene occlusion
 or beam footprints. Gap probes are spaced 0.25 degrees. Extrapolation beyond
 the original four seconds is unverified.
 """
+
 import argparse
 import hashlib
 import json

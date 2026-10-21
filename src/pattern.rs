@@ -37,6 +37,34 @@ impl Mid360Pattern {
         index.checked_mul(POINT_INTERVAL_NS)
     }
 }
+/// Explicit scan profile; the default is a compact representative hardware pattern.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ScanPattern {
+    /// Quarter-degree hardware optics with mean clocks, for general simulation.
+    #[default]
+    Nominal,
+    /// Original fit of the published four-second table; inferred 12 s period.
+    OfficialTable,
+    /// Hardware-derived optics with mean clocks; representative, not exact replay.
+    HardwareMean,
+    /// Hardware-derived optics with bounded 300 s measured clock reconstruction.
+    HardwareCapture,
+}
+impl ScanPattern {
+    /// Unit sensor FLU direction, or `None` beyond a bounded profile's support.
+    pub fn direction(self, sample_index: u64) -> Option<[f64; 3]> {
+        match self {
+            Self::Nominal => Some(crate::hardware::NominalPattern.direction(sample_index)),
+            Self::OfficialTable => Some(Mid360Pattern.direction(sample_index)),
+            Self::HardwareMean => {
+                Some(crate::hardware::HardwareMeanPattern.direction(sample_index))
+            }
+            Self::HardwareCapture => {
+                crate::hardware::HardwareCapturePattern.direction(sample_index)
+            }
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

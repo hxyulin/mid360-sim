@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright (c) 2026 hxyulin <hxyulin@proton.me>
+name: CI
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  rust:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: cargo fmt --all -- --check
+      - run: cargo test --locked
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: python scripts/check-repository.py
+  python:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - python: '3.10'
+            mujoco: 'mujoco==3.7.0'
+          - python: '3.12'
+            mujoco: 'mujoco>=3.7,<4'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install './integrations/python[mujoco]' '${{ matrix.mujoco }}'
+      - run: python -m unittest discover -s integrations/python/tests -v
+      - run: python scripts/check-motion-distortion.py --mujoco
+  analysis:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements-analysis.txt
+      - run: python -W error scripts/test-motion-comparison.py
+      - run: python scripts/test-external-capture.py
+  gazebo:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t mid360-gazebo:harmonic integrations/gazebo
+      - run: |
+          mkdir -p local-assets/gazebo-out
+          docker run --rm -v "$PWD/integrations/gazebo:/workspace/source:ro" \
+            -v "$PWD/local-assets/gazebo-out:/workspace/out" mid360-gazebo:harmonic \
+            bash /workspace/source/tests/run.sh
+  ros2:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: prefix-dev/setup-pixi@v0
+        with:
+          pixi-version: v0.81.0
+          frozen: true
+      - run: pixi run test
+      - run: pixi run smoke
+      - run: pixi run smoke --stride 3

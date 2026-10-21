@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright (c) 2026 hxyulin <hxyulin@proton.me>
+# Release tooling only; not imported by the simulation runtime.
+build>=1.2,<2
+zstandard>=0.23,<1
+setuptools>=77,<83
+wheel>=0.45,<1

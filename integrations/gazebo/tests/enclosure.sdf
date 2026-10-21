@@ -1,0 +1,14 @@
+<!-- SPDX-License-Identifier: MIT OR Apache-2.0 -->
+<!-- Copyright (c) 2026 hxyulin <hxyulin@proton.me> -->
+<sdf version="1.9"><world name="mid360_test">
+<physics name="step" type="ignored"><max_step_size>0.001</max_step_size><real_time_factor>0</real_time_factor><dart><collision_detector>bullet</collision_detector></dart></physics>
+<plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"><engine><filename>gz-physics-dartsim-plugin</filename></engine></plugin>
+<model name="sensor"><static>true</static><pose>0 0 0.8 0 0 0</pose><link name="lidar"/>
+<plugin filename="mid360-gazebo" name="mid360::Mid360"><link_name>lidar</link_name><report_file>/workspace/out/frames.jsonl</report_file></plugin></model>
+<model name="xp"><static>true</static><pose>10 0 0 0 0 0</pose><link name="wall"><collision name="surface"><geometry><box><size>0.2 20 20</size></box></geometry></collision></link></model>
+<model name="xm"><static>true</static><pose>-10 0 0 0 0 0</pose><link name="wall"><collision name="surface"><geometry><box><size>0.2 20 20</size></box></geometry></collision></link></model>
+<model name="yp"><static>true</static><pose>0 10 0 0 0 0</pose><link name="wall"><collision name="surface"><geometry><box><size>20 0.2 20</size></box></geometry></collision></link></model>
+<model name="ym"><static>true</static><pose>0 -10 0 0 0 0</pose><link name="wall"><collision name="surface"><geometry><box><size>20 0.2 20</size></box></geometry></collision></link></model>
+<model name="zp"><static>true</static><pose>0 0 10 0 0 0</pose><link name="wall"><collision name="surface"><geometry><box><size>20 20 0.2</size></box></geometry></collision></link></model>
+<model name="zm"><static>true</static><pose>0 0 -10 0 0 0</pose><link name="wall"><collision name="surface"><geometry><box><size>20 20 0.2</size></box></geometry></collision></link></model>
+</world></sdf>

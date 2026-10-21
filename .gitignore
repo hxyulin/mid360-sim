@@ -3,3 +3,10 @@
 /.ros/
 /local-assets/
 __pycache__/
+*.egg-info/
+/node_modules/
+/docs/.vitepress/cache/
+/docs/.vitepress/dist/
+/dist/
+/build/
+integrations/python/build/

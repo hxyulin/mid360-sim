@@ -5,6 +5,7 @@
 Run through the Pixi smoke task after building. A separate ROS domain isolates
 this test. No driver, device, ROS daemon or running simulator is required.
 """
+
 import argparse
 import math
 import os
@@ -21,6 +22,11 @@ def main():
         default=Path("target/release/mid360-sim"),
     )
     parser.add_argument("--stride", type=int, default=1)
+    parser.add_argument(
+        "--pattern",
+        choices=["nominal", "official-table", "hardware-mean", "hardware-capture"],
+        default="nominal",
+    )
     args = parser.parse_args()
     if args.stride < 1:
         parser.error("stride must be positive")
@@ -76,6 +82,8 @@ def main():
             str(args.binary.resolve()),
             "--frames",
             "6",
+            "--pattern",
+            args.pattern,
             "--require-subscriber",
             "--wait-for-subscriber-ms",
             "5000",

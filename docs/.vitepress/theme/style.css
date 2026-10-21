@@ -1,0 +1,5 @@
+/* SPDX-License-Identifier: MIT OR Apache-2.0 */
+/* Copyright (c) 2026 hxyulin <hxyulin@proton.me> */
+:root { --vp-c-brand-1: #157c73; --vp-c-brand-2: #168c81; --vp-c-brand-3: #10796f; }
+.dark { --vp-c-brand-1: #67d4c1; --vp-c-brand-2: #43bba8; --vp-c-brand-3: #238e80; }
+.VPHero .text { max-width: 720px; }

@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright (c) 2026 hxyulin <hxyulin@proton.me>
+[package]
+version = "0.1.0"
+title = "MID-360 representative LiDAR"
+description = "Long-cycle four-lane scanning over USD optical meshes using Warp GPU ray queries"
+category = "Simulation"
+authors = ["hxyulin"]
+[dependencies]
+"omni.usd" = {}
+"omni.warp.core" = {}
+"omni.timeline" = {}
+[[python.module]]
+name = "mid360.isaac"

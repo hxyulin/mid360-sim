@@ -36,3 +36,35 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+The fitted hardware optics/clock parameters in `src/hardware_data.rs` derive from
+an owner-provided stationary MID-360 capture with SHA-256
+`82ef4b05ad71132999e522aae7b6f927db58a5570876b865a407a9d0faaa5b69`.
+The raw recording and private decoder are not redistributed. Original measurements
+retain their ownership. The fitter/runtime are local implementations; the
+hardware profile does not copy the official Livox coefficient table. See
+`docs/hardware-fit.md` for filtering, withheld data, phase calibration and limits.
+
+
+## Optional Isaac Sim adapter
+
+The adapter in `integrations/isaac-sim/` is original MIT OR Apache-2.0 code
+using NVIDIA Isaac Sim, OpenUSD and Warp APIs supplied by the user's Isaac
+installation. No NVIDIA runtime, implementation source, raw recording or
+sensor CAD is vendored. Those installed products retain their own licenses.
+The small generated `nominal.json` contains the same derived optical parameters
+as the Rust nominal model, plus explicit simulation clock choices and test
+rays. Original measurements retain their ownership. This adapter performs
+geometric ray queries, not the proprietary RTX sensor material/return model.
+
+
+## Optional MuJoCo and Gazebo adapters
+
+The original adapter code under `integrations/python/` and
+`integrations/gazebo/` uses separately installed MuJoCo, NumPy and Gazebo SDKs.
+No engine implementation code or recorded datasets are vendored. MuJoCo 3.7.0,
+NumPy 2.5.4 and Gazebo Harmonic were used for native validation; installed
+products retain their own licenses. Generated tiny model files contain the same
+derived nominal optical parameters and explicit simulation clocks as the Rust
+core. Original measurements retain their ownership. Docker recipes install
+Gazebo packages only into an opt-in development container.

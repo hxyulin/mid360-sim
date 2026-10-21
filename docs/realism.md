@@ -41,6 +41,18 @@ curl -fL https://raw.githubusercontent.com/Livox-SDK/livox_laser_simulation/1cce
 python scripts/fit-mid360-pattern.py local-assets/mid360.csv --rust-output local-assets/coefficients.rs --report local-assets/fit.json
 ```
 
+## Hardware check
+
+A [300-second stationary capture](hardware-validation.md) does not confirm the
+fixed official-table trajectory as a calibrated hardware model. It shows
+approximately +181.004 Hz azimuth and 9.80787 Hz elevation carriers, a convention
+mismatch, and no exact 12-second recurrence. The CSV validation above must not
+be presented as hardware validation. The original profile remains selectable as `official-table`; the default is
+now the simplified representative `nominal` hardware profile.
+The separate [hardware-derived profile](hardware-fit.md) fits optics with disjoint packets and exposes both
+mean clocks and a bounded recorded-clock reconstruction. Its measured-phase
+reconstruction accuracy must not be treated as future-phase prediction.
+
 ## Implemented here
 
 - Per-emission scene queries with explicit times and local FLU rays. A backend
@@ -85,3 +97,6 @@ Prioritize geometry + IMU + real recordings for navigation. Weather, multipath,
 interference and false alarms are lower priority for an indoor arena. Neither
 this package nor the original simulator currently provides these calibrated
 hardware effects.
+
+See [motion distortion](motion-distortion.md) for the per-backend acquisition
+comparison, reproducible rolling-motion errors and moving-hardware validation gaps.

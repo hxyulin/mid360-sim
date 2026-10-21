@@ -8,6 +8,9 @@ license = "MIT OR Apache-2.0"
 description = "Deterministic MID-360 scan approximation with a scene-query interface and optional rclrs publishing"
 repository = "https://github.com/hxyulin/mid360-sim"
 publish = false
+documentation = "https://hxyulin.github.io/mid360-sim/"
+readme = "README.md"
+include = ["/src/**", "/examples/**", "/Cargo.toml", "/Cargo.lock", "/README.md", "/LICENSE-MIT", "/LICENSE-APACHE", "/NOTICE.md"]
 
 [features]
 default = []
