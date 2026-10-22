@@ -11,6 +11,7 @@ ordinary Rust checks do not require ROS, a GPU or another simulator.
 ```sh
 cargo fmt --all -- --check
 cargo test --locked
+cargo test --locked --example synchronized
 cargo clippy --all-targets --locked -- -D warnings
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked
 cargo deny --config deny.toml check
@@ -19,7 +20,8 @@ python scripts/test-model-checks.py
 ```
 
 Deterministic adapter and articulated-scene regressions run in `cargo test`.
-The same command runs public API doctests; `cargo test --doc --locked` runs
+The synchronized example has its own fixture/scoring regressions and is tested
+explicitly above. The core test command also runs public API doctests; `cargo test --doc --locked` runs
 only those examples. Keep examples executable, with assertions for timing,
 frames or validation behavior rather than construction alone. Public items
 must have documentation, including units; rustdoc warnings should stay clean.

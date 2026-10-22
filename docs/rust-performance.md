@@ -8,28 +8,126 @@ They guide optimization priorities; they do not replace the
 [native backend results](performance-tradeoffs.md) or
 [ROS transport measurements](transport-evaluation.md).
 
+## Implemented follow-up
+
+The retained changes share dense hardware/official-profile harmonics, traverse
+capture knots per acquisition, remove derivative work from fixture geometry,
+cache the intentionally frozen scoring pose, and cache ROS message metadata.
+A small inline hint keeps the acquisition cursor on the hot path. Dynamic
+sensor poses and scene queries remain evaluated per emission. Bitwise reference
+regressions cover patterns, retained measurements and fixture/scoring values.
+
+The rounded dropout endpoint bug is fixed without changing the uniform mapping
+or Gaussian streams. Disabled diffuse dropout and unit diffuse response no longer
+discard hits through a rounded endpoint; independent dropout one always rejects.
+Other effect/range checks still apply. Rare endpoint outputs change. Native tests also
+cover a pinned rclrs limitation: single-return Livox publication returns a
+controlled error; PointCloud2 supports it. See [ROS installation](install/ros2.md).
+
+### Serial local comparisons
+
+[Complete trials, protocols and source hashes](/benchmarks/performance-followup-m5-max.json)
+compare baseline `d2bb666` with the implementation. The candidate parent revision
+and dirty source hashes identify the measured code, including the inline hint.
+Other projects were compiling/testing on this M5 Max during measurement; absolute
+times and small differences are inconclusive. No host processes were stopped.
+
+Profiles below use **20,000 retained rays, stride one, trivial geometry**.
+Numbers are medians of three outer comparisons, each with two warmups and ten
+inner trials, alternating baseline/candidate immediately for each exact case.
+The capture window is near the end of the recording.
+
+| Profile | Before | After | Observed throughput ratio |
+|---|---:|---:|---:|
+| Nominal | 0.981 ms | 0.986 ms | approximately unchanged |
+| OfficialTable | 2.683 ms | 1.099 ms | 2.44× |
+| HardwareMean | 2.559 ms | 1.140 ms | 2.24× |
+| HardwareCapture | 2.853 ms | 1.094 ms | 2.61× |
+
+Strides two/three/seven and packet sizes one/200/20,000 are in the raw results.
+Dense stride-two gains are smaller, sparse mean/official differences are mixed,
+and capture still benefits from knot traversal. Do not generalize stride-one
+ratios to every decimation or scene. Tiny calls also benefit from avoiding
+endpoint direction evaluations used only for validation.
+
+The synchronized **two-second, 20-packet articulated example**, including caller
+IMU synthesis and scoring, changes from **267.49 to 87.39 ms**
+(median of five alternating runs, **3.06×** observed throughput). This
+measures the analytic example, not native simulator dynamics or a navigation
+estimator. Output/scoring regressions compare against the original Jet oracle.
+
+The native metadata-only benchmark creates 1,000 empty messages per case and
+excludes field population, DDS publishing and subscribers. CustomMsg creation
+changes from **1.924 to 0.632 ms per 1,000**; other types are recorded alongside
+it. This saves about 1.3 microseconds per empty construction here, not a 3× gain
+in complete ROS publishing. Fresh owned messages remain required by rclrs.
+
+### MuJoCo experiment rejected
+
+Bounded scratch reuse reduced the rotation-to-query incremental allocation peak
+in an agent probe, but the parent native timing comparison found no useful gain
+for short acquisitions: 200-ray held/rolling calls were approximately flat,
+67-ray stride-three rolling calls were slower, and long-batch gains overlapped
+broad timing ranges. The candidate also retained up to 11.2 MB of extra scratch.
+The production adapter was restored to its allocating baseline; the added native
+ownership, rotation, chunking, near-occlusion and moving-geometry tests remain.
+Experimental source `0553112` and all seven-trial samples are identified in the
+machine-readable results. NumPy 2.5.4 / MuJoCo 3.7.0 were used. No Isaac/Gazebo
+runtime was measured or changed in this follow-up.
+
 ## Reproduce
 
 ```sh
 cargo run --release --locked --example core_bench
+cargo run --release --locked --example profile_bench
+cargo run --release --locked --example profile_bench -- HardwareCapture 20000 1
+pixi run bash scripts/with-ros.sh cargo run --release --locked --features ros2 --example ros_metadata_bench
 ```
 
-Host: Apple M5 Max, macOS arm64, rustc 1.99.0. Each case has three warmups and
+These commands run the current checkout. For the recorded scan comparison,
+extract the baseline into ignored scratch, copy only the new harness, and build
+both with the same Rust toolchain and release flags:
+
+```sh
+mkdir -p local-assets/perf-baseline
+git archive d2bb666 | tar -x -C local-assets/perf-baseline
+cp examples/profile_bench.rs local-assets/perf-baseline/examples/
+cargo build --release --locked --manifest-path local-assets/perf-baseline/Cargo.toml --example profile_bench
+```
+
+Alternate its `target/release/examples/profile_bench` and the current binary for
+each exact case; the optional profile/count/stride filter supports this directly.
+Do not run competing benchmarks concurrently. Capture complete outputs and
+record unrelated host load rather than selecting only favorable trials.
+
+To reproduce the rejected MuJoCo candidate with the optional native environment:
+
+```sh
+git show d2bb666:integrations/python/mid360_sim/mujoco.py > local-assets/mujoco-before.py
+git show 0553112:integrations/python/mid360_sim/mujoco.py > local-assets/mujoco-scratch.py
+python scripts/benchmark-mujoco-scratch.py local-assets/mujoco-before.py --candidate local-assets/mujoco-scratch.py
+```
+
+The script checks full output bits before seven alternating timing trials and
+prints JSON. It queries static geometry without advancing physics.
+
+For the original `core_bench` baseline below, the host was Apple M5 Max, macOS
+arm64, rustc 1.99.0. Each case had three warmups and
 15 timed repetitions in fixed order, with no CPU pinning. Acquisition reuses
 its output allocation; packing allocates new output on every call. Each scan
 case covers ten 100 ms packets at the nominal emission rate; stride 3 retains
 66,670 rays over those same windows. Stride selection restarts at each packet,
 changing the modulo-3 phase; synchronized acquisition instead keeps global
-multiples of three (66,667 rays in one second). The spherical surface is an intentionally
-trivial query; the articulated room uses the shared analytic fixture, including
+multiples of three (66,667 rays in one second). The spherical surface is an
+intentionally trivial query; the articulated room uses the shared analytic fixture, including
 per-emission dynamic mounting rotations. This is not native simulator physics.
 
 [Machine-readable results and source checksums](/benchmarks/rust-core-m5-max.json)
 include medians and observed minima/maxima. The source revision identifies the
 library and fixture; the benchmark was added afterward and has its own checksum.
-No speedup has been implemented or established by this baseline.
+This original baseline predates the implemented follow-up above.
 
-## Measurements
+## Original baseline measurements
 
 Acquisition times below cover 200,000 retained rays unless stated otherwise.
 Optional effects remain uncalibrated stress models.
@@ -50,8 +148,7 @@ Optional effects remain uncalibrated stress models.
 
 Packing repeats one warm 20,000-return packet ten times; the count is aggregate
 work, not one 200,000-point packet. These stages run separately, with already
-acquired input for packing. Subtracting
-cases indicates incremental workload cost, not a profiler attribution. In
+acquired input for packing. Subtracting cases indicates incremental workload cost, not a profiler attribution. In
 particular, dropout changes how many returns reach subsequent range-noise work.
 
 The caller-owned articulated IMU fixture takes 160.36 ms for 200,000 samples,
@@ -73,17 +170,17 @@ priority at 10 Hz clouds and 200 Hz IMU.
 
 Three focused reviews covered patterns/acquisition, effects/kinematics, and
 transport/native adapters, including older code. The parent review checked
-relevant source and independently reran the unexpected-miss reproducer. No
-production optimization or bug fix is included in this review. Operation counts
-and compiler evidence identify work to remove; they are not measured speedups.
+relevant source and independently reran the unexpected-miss reproducer. The following records the original review proposals; implementation status and
+measured results above supersede proposal wording. Operation counts and compiler
+evidence alone are not speedup measurements.
 
 ### Correctness first: disabled diffuse dropout can reject a valid hit
 
-`effects::uniform` can round to exactly `1.0`. The sensor tests
+`effects::uniform` can round to exactly `1.0`. The baseline sensor tested
 `uniform(seed, index, 2) < response` even when diffuse dropout is disabled and
 `response` is one. With seed **7849933349262882758**, index zero, default effects
 and a valid 2 m surface, acquisition returns a miss. This was reproduced against
-the current release build. It is an endpoint rounding error, not configured
+the baseline release build; the implemented follow-up now fixes it. It is an endpoint rounding error, not configured
 random dropout.
 
 A narrowly scoped disabled-diffuse bypass is a candidate fix. Probability-one
@@ -94,15 +191,15 @@ that rare outputs change. Do not label it a bit-preserving optimization.
 
 ### First: share scan-profile work across retained lanes
 
-`hardware.rs` repeats phases and 22 harmonic sin/cos evaluations per lane in
-mean/capture profiles; `pattern.rs` does likewise for the older official-table
+At baseline, `hardware.rs` repeated phases and 22 harmonic sin/cos evaluations
+per lane in mean/capture profiles; `pattern.rs` did likewise for the official-table
 profile. Four-lane evaluation could reduce harmonic sets from 88 to 22 per full
 group; final ray trig remains lane-specific. Nominal acquisition already shares
 this work at strides one and two. Add equivalent paths for all profiles while
 preserving each lane's accumulation order and phase reduction. Retain a scalar
 path for sparse strides instead of always calculating four lanes.
 
-Capture also searches 7,004 calibration knots per ray. After grouping, test a
+Baseline capture also searched 7,004 calibration knots per ray. After grouping, test a
 packet-local cursor initialized by one binary search and advanced monotonically.
 Keep the exact knot-boundary comparison, interpolation arithmetic and held
 residuals outside the knot range. A local cursor must not couple separate or
@@ -121,7 +218,7 @@ at strides two/three is a further candidate once the simpler paths are measured.
 
 ### Second: remove fixture-only work from rolling geometry and scoring
 
-Release LLVM IR retains a full 288-byte Jet pose and derivative calculations in
+Baseline release LLVM IR retained a full 288-byte Jet pose and derivative work in
 room intersection even though only pose values are consumed. Use one shared
 trajectory expression supporting both `f64` and Jet, preserving value arithmetic
 order; retain derivatives for caller IMU synthesis. This could improve the
@@ -139,7 +236,7 @@ priority candidates; preserve owned outputs, miss records and IMU endpoints.
 ### Third: cache ROS metadata and measure native construction
 
 The locked rclrs 0.8.0 supports safe `DynamicMessageMetadata::create()`. Current
-publishers recreate metadata and parse type names on each publish. Retaining
+publishers recreated metadata and parsed type names on each publish at baseline. Retaining
 metadata can avoid schema construction; upstream already caches loaded libraries.
 This does not require unsafe code or a new dependency. Reusing whole messages is
 a separate ownership problem because publishing consumes `DynamicMessage`.
@@ -200,11 +297,12 @@ it. Keep the old implementation as a bitwise comparison oracle across seeds,
 indices, poles and strides: chunk invariance alone cannot catch a consistently
 changed seeded stream. An alternative noise policy would need explicit semantics.
 
-## Before claiming an optimization win
+## Remaining benchmark coverage
 
-Extend the baseline with official-table and direction-only cases, sparse hardware
-profiles, tiny/unaligned packets, early/middle/late capture windows, global stride
-alignment, isolated noise/dropout modes, and synchronized scoring/assembly.
+The follow-up adds official-table, tiny/unaligned packets, sparse hardware
+profiles and late capture windows. Still add direction-only cases, early/middle
+capture windows, global stride alignment, isolated noise/dropout modes, and
+separately timed synchronized scoring/assembly.
 Record build flags and allocation counts where relevant. The current min/max
 ranges and fixed case order cannot establish significance for small gains.
 Run old/new comparisons serially on an otherwise idle host, alternate their

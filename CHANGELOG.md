@@ -4,6 +4,18 @@
 
 ## Unreleased
 
+- Make disabled and probability-one dropout endpoints exact without changing
+  the uniform mapping or Gaussian streams; rare rounded-endpoint outputs change.
+- Share dense four-lane work for hardware and official-table scan profiles,
+  traverse capture knots per acquisition and retain per-emission scene queries.
+- Remove derivative work from synchronized fixture geometry, cache frozen
+  diagnostic poses and reuse bounded packet/IMU storage with bitwise regressions.
+- Retain expanded MuJoCo ownership, rolling-rotation and moving-geometry tests;
+  discard the scratch-buffer experiment after native timing comparisons.
+- Cache ROS publisher metadata while retaining fresh owned messages. Reject
+  single-point Livox packets with an error before the pinned rclrs panic;
+  PointCloud2 continues to support singleton packets.
+
 - Add a dependency-free Rust microbenchmark for acquisition effects, capture
   profiles, caller IMU synthesis, packet conversion and fault-queue scheduling,
   with a scoped local baseline and prioritized optimization follow-ups.

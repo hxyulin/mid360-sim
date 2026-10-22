@@ -34,3 +34,8 @@ required-features = ["ros2"]
 name = "transport"
 path = "examples/transport.rs"
 required-features = ["ros2"]
+
+[[example]]
+name = "ros_metadata_bench"
+path = "examples/ros_metadata_bench.rs"
+required-features = ["ros2"]
