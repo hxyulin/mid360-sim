@@ -120,6 +120,20 @@ pub struct ImuPublisher {
 impl ImuPublisher {
     /// Create a best-effort volatile IMU endpoint (depth 200) in a named sensor frame.
     pub fn new(node: &Node, topic: &str, frame_id: &str) -> Result<Self> {
+        Self::new_with_qos(
+            node,
+            topic,
+            frame_id,
+            rclrs::QoSProfile::sensor_data_default().keep_last(200),
+        )
+    }
+    /// Create an IMU endpoint with caller-selected delivery QoS; units remain SI.
+    pub fn new_with_qos(
+        node: &Node,
+        topic: &str,
+        frame_id: &str,
+        qos: rclrs::QoSProfile,
+    ) -> Result<Self> {
         anyhow::ensure!(
             !frame_id.is_empty() && !frame_id.contains('\0'),
             "invalid IMU frame ID"
@@ -127,7 +141,7 @@ impl ImuPublisher {
         Ok(Self {
             publisher: node.create_dynamic_publisher(
                 MessageTypeName::try_from("sensor_msgs/msg/Imu")?,
-                topic.keep_last(200).best_effort(),
+                topic.qos(qos),
             )?,
             frame_id: frame_id.into(),
         })
@@ -177,6 +191,194 @@ impl ImuPublisher {
             bail!("IMU covariance schema mismatch");
         }
         self.publisher.publish(msg)?;
+        Ok(())
+    }
+}
+
+/// Standard PointCloud2 publisher with explicit nanosecond timing fields.
+pub struct PointCloudPublisher {
+    publisher: DynamicPublisher,
+}
+impl PointCloudPublisher {
+    /// Create a best-effort volatile cloud endpoint with depth 5.
+    pub fn new(node: &Node, topic: &str) -> Result<Self> {
+        Self::new_with_qos(
+            node,
+            topic,
+            rclrs::QoSProfile::sensor_data_default().keep_last(5),
+        )
+    }
+    /// Create a cloud endpoint with caller-selected delivery QoS.
+    pub fn new_with_qos(node: &Node, topic: &str, qos: rclrs::QoSProfile) -> Result<Self> {
+        Ok(Self {
+            publisher: node.create_dynamic_publisher(
+                MessageTypeName::try_from("sensor_msgs/msg/PointCloud2")?,
+                topic.qos(qos),
+            )?,
+        })
+    }
+    /// Current cloud subscription count for bounded discovery waits.
+    pub fn subscription_count(&self) -> Result<usize> {
+        Ok(self.publisher.get_subscription_count()?)
+    }
+    /// Publish raw, unorganized local points in metres. Header is the packet
+    /// timebase; UINT32 `offset_time` retains nanoseconds, including miss gaps.
+    pub fn publish(&self, packet: &LivoxPacket) -> Result<()> {
+        anyhow::ensure!(
+            crate::RosTime::from_ns(packet.timebase_ns).map_err(anyhow::Error::msg)?
+                == packet.stamp,
+            "cloud header/timebase mismatch"
+        );
+        anyhow::ensure!(
+            !packet.config.frame_id.is_empty() && !packet.config.frame_id.contains('\0'),
+            "invalid cloud frame"
+        );
+        let data = crate::pointcloud::encode(packet).map_err(anyhow::Error::msg)?;
+        let mut msg =
+            DynamicMessage::new(MessageTypeName::try_from("sensor_msgs/msg/PointCloud2")?)?;
+        if let Some(ValueMut::Simple(SimpleValueMut::Message(mut h))) = msg.get_mut("header") {
+            scalar!(
+                h,
+                "frame_id",
+                String,
+                packet.config.frame_id.as_str().into()
+            );
+            if let Some(ValueMut::Simple(SimpleValueMut::Message(mut t))) = h.get_mut("stamp") {
+                scalar!(t, "sec", Int32, packet.stamp.sec);
+                scalar!(t, "nanosec", Uint32, packet.stamp.nanosec);
+            } else {
+                bail!("cloud timestamp schema mismatch");
+            }
+        } else {
+            bail!("cloud header schema mismatch");
+        }
+        scalar!(msg, "height", Uint32, 1);
+        scalar!(msg, "width", Uint32, u32::try_from(packet.points.len())?);
+        scalar!(msg, "is_bigendian", Boolean, false);
+        scalar!(msg, "is_dense", Boolean, true);
+        scalar!(msg, "point_step", Uint32, crate::pointcloud::POINT_STEP);
+        scalar!(msg, "row_step", Uint32, u32::try_from(data.len())?);
+        if let Some(ValueMut::Sequence(SequenceValueMut::MessageSequence(mut fields))) =
+            msg.get_mut("fields")
+        {
+            fields.reset(crate::pointcloud::FIELDS.len());
+            for (f, (name, offset, datatype)) in fields
+                .as_mut_slice()
+                .iter_mut()
+                .zip(crate::pointcloud::FIELDS)
+            {
+                scalar!(f, "name", String, name.into());
+                scalar!(f, "offset", Uint32, offset);
+                scalar!(f, "datatype", Uint8, datatype);
+                scalar!(f, "count", Uint32, 1);
+            }
+        } else {
+            bail!("cloud fields schema mismatch");
+        }
+        if let Some(ValueMut::Sequence(SequenceValueMut::Uint8Sequence(bytes))) =
+            msg.get_mut("data")
+        {
+            *bytes = data.as_slice().into();
+        } else {
+            bail!("cloud data schema mismatch");
+        }
+        self.publisher.publish(msg)?;
+        Ok(())
+    }
+}
+
+/// Physical TF edges only. The caller owns the tree, authority and joint history.
+/// No world-to-body pose or odometry is generated by this publisher.
+pub struct TransformPublisher {
+    fixed: DynamicPublisher,
+    moving: DynamicPublisher,
+}
+impl TransformPublisher {
+    /// Create reliable `/tf` (depth 100) and transient-local `/tf_static` (depth 1).
+    /// Publish the complete set of this authority's static edges in one call.
+    pub fn new(node: &Node) -> Result<Self> {
+        let ty = MessageTypeName::try_from("tf2_msgs/msg/TFMessage")?;
+        Ok(Self {
+            fixed: node.create_dynamic_publisher(
+                ty.clone(),
+                "/tf_static".keep_last(1).reliable().transient_local(),
+            )?,
+            moving: node.create_dynamic_publisher(ty, "/tf".keep_last(100).reliable())?,
+        })
+    }
+    /// Publish a bounded batch (at most 4096) of caller-stamped edges. Static
+    /// batches must contain each child once. Dynamic history may repeat children
+    /// at strictly increasing times in nanoseconds. Never freeze a moving joint.
+    pub fn publish(&self, edges: &[crate::frames::FrameTransform], is_static: bool) -> Result<()> {
+        anyhow::ensure!(edges.len() <= 4096, "TF batch exceeds allocation budget");
+        let mut previous = std::collections::BTreeMap::new();
+        for e in edges {
+            e.validate().map_err(anyhow::Error::msg)?;
+            if let Some((parent, time)) = previous.insert(&e.child, (&e.parent, e.time_ns)) {
+                anyhow::ensure!(
+                    !is_static && parent == &e.parent && time < e.time_ns,
+                    "duplicate or nonmonotonic TF child"
+                );
+            }
+        }
+        let mut msg = DynamicMessage::new(MessageTypeName::try_from("tf2_msgs/msg/TFMessage")?)?;
+        if let Some(ValueMut::Sequence(SequenceValueMut::MessageSequence(mut transforms))) =
+            msg.get_mut("transforms")
+        {
+            transforms.reset(edges.len());
+            for (view, e) in transforms.as_mut_slice().iter_mut().zip(edges) {
+                scalar!(view, "child_frame_id", String, e.child.as_str().into());
+                let stamp = RosTime::from_ns(e.time_ns).map_err(anyhow::Error::msg)?;
+                if let Some(ValueMut::Simple(SimpleValueMut::Message(mut h))) =
+                    view.get_mut("header")
+                {
+                    scalar!(h, "frame_id", String, e.parent.as_str().into());
+                    if let Some(ValueMut::Simple(SimpleValueMut::Message(mut t))) =
+                        h.get_mut("stamp")
+                    {
+                        scalar!(t, "sec", Int32, stamp.sec);
+                        scalar!(t, "nanosec", Uint32, stamp.nanosec);
+                    } else {
+                        bail!("TF stamp schema mismatch");
+                    }
+                } else {
+                    bail!("TF header schema mismatch");
+                }
+                if let Some(ValueMut::Simple(SimpleValueMut::Message(mut tf))) =
+                    view.get_mut("transform")
+                {
+                    if let Some(ValueMut::Simple(SimpleValueMut::Message(mut p))) =
+                        tf.get_mut("translation")
+                    {
+                        scalar!(p, "x", Double, e.transform.translation_m[0]);
+                        scalar!(p, "y", Double, e.transform.translation_m[1]);
+                        scalar!(p, "z", Double, e.transform.translation_m[2]);
+                    } else {
+                        bail!("TF translation schema mismatch");
+                    }
+                    if let Some(ValueMut::Simple(SimpleValueMut::Message(mut q))) =
+                        tf.get_mut("rotation")
+                    {
+                        let [x, y, z, w] = e.transform.rotation_xyzw;
+                        scalar!(q, "x", Double, x);
+                        scalar!(q, "y", Double, y);
+                        scalar!(q, "z", Double, z);
+                        scalar!(q, "w", Double, w);
+                    } else {
+                        bail!("TF rotation schema mismatch");
+                    }
+                } else {
+                    bail!("TF transform schema mismatch");
+                }
+            }
+        } else {
+            bail!("TF sequence schema mismatch");
+        }
+        if is_static {
+            self.fixed.publish(msg)?;
+        } else {
+            self.moving.publish(msg)?;
+        }
         Ok(())
     }
 }

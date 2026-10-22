@@ -56,7 +56,14 @@ configure frame transforms explicitly. Neither timestamps alone nor a more
 accurate scan-pattern fit compensates for wrong units, extrinsics or clock
 alignment. Motion skew should remain in the raw scan until the consumer deskews it.
 
-## Downstream compatibility checks
+## Runnable ROS regression
+
+The [navigation demo](navigation-demo.md) adds caller-owned dynamic/static TF,
+PointCloud2 with integer per-point timing, and an external TriLIO regression
+using the analytic fixture or an isolated actual RM CAD host.
+See its [recorded evaluation](../navigation-evaluation.md) for current results.
+
+## Historical downstream compatibility checks
 
 A 2026-10-22 experiment fed native MuJoCo rolling scans of the public
 [ETH3D Office mesh](scanned-geometry.md) and caller-generated 200 Hz IMU through
@@ -86,8 +93,9 @@ belong to the localization stack.
 
 These are compatibility results from a TriLIO development snapshot based on
 `57604a28450bcd62732fdcadde3ce93808b882ca` plus existing uncommitted changes,
-not a released integration or performance promise. The estimator and full
-end-to-end replay harness are not bundled here. Reproducing them requires a
+not a released integration or performance promise. The estimator and that historical
+end-to-end replay harness are not bundled here. The newer runnable regression
+above uses a different estimator implementation and is scored separately. Reproducing them requires a
 compatible estimator and caller-owned IMU/ROS bridge. The source mesh example
 is reproducible separately using the [public workflow](scanned-geometry.md).
 

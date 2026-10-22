@@ -41,6 +41,7 @@ export default defineConfig({
         { text: 'Acquisition and motion', link: '/guide/acquisition' },
         { text: 'Scan patterns', link: '/guide/patterns' },
         { text: 'Use with navigation', link: '/guide/navigation' },
+        { text: 'TF, clouds and LIO demo', link: '/guide/navigation-demo' },
         { text: 'Validation and limits', link: '/guide/validation' },
       ] },
       { text: 'Install and integrate', items: [
@@ -67,6 +68,7 @@ export default defineConfig({
         { text: 'Independent captures', link: '/external-captures' },
         { text: 'Controlled motion', link: '/motion-distortion' },
         { text: 'Synchronized sensor evaluation', link: '/synchronized-evaluation' },
+        { text: 'Navigation integration evaluation', link: '/navigation-evaluation' },
         { text: 'Motion ground truth', link: '/motion-ground-truth' },
         { text: 'Recorded-motion results', link: '/motion-comparison-results' },
         { text: 'Backend MoCap replay', link: '/backend-ground-truth' },

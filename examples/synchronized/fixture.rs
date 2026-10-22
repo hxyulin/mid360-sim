@@ -103,6 +103,7 @@ pub enum Motion {
     Stationary,
     Yaw,
     Articulated,
+    Lio,
 }
 impl Motion {
     pub fn name(self) -> &'static str {
@@ -110,6 +111,7 @@ impl Motion {
             Self::Stationary => "stationary",
             Self::Yaw => "yaw",
             Self::Articulated => "articulated",
+            Self::Lio => "lio",
         }
     }
     pub fn parse(s: &str) -> Result<Self, &'static str> {
@@ -117,7 +119,8 @@ impl Motion {
             "stationary" => Ok(Self::Stationary),
             "yaw" => Ok(Self::Yaw),
             "articulated" => Ok(Self::Articulated),
-            _ => Err("motion must be stationary, yaw or articulated"),
+            "lio" => Ok(Self::Lio),
+            _ => Err("motion must be stationary, yaw, articulated or lio"),
         }
     }
 }
@@ -126,20 +129,39 @@ struct Pose {
     p: [Jet; 3],
     r: Matrix,
 }
-fn lidar_pose(t: f64, motion: Motion) -> Pose {
+fn parts(t: f64, motion: Motion) -> (Matrix, Matrix, [Jet; 3]) {
     let t = Jet {
         v: t,
         d: 1.,
         dd: 0.,
     };
-    let (base, head, p) = match motion {
+    // Quiet initialization followed by a C2 ramp into articulated motion.
+    let t = if matches!(motion, Motion::Lio) {
+        let u = t.v - 3.;
+        if u <= 0. {
+            Jet::from(0.)
+        } else if u < 1. {
+            // Integral of 3u²-2u³: velocity and acceleration start at zero.
+            let u = Jet {
+                v: u,
+                d: 1.,
+                dd: 0.,
+            };
+            u * u * u + -(u * u * u * u * 0.5.into())
+        } else {
+            t + (-3.5).into()
+        }
+    } else {
+        t
+    };
+    match motion {
         Motion::Stationary => (rz(0.into()), ry(0.into()), [0.into(), 0.into(), 1.2.into()]),
         Motion::Yaw => (
             rz(t * 0.8.into()),
             ry(0.into()),
             [0.into(), 0.into(), 1.2.into()],
         ),
-        Motion::Articulated => (
+        Motion::Articulated | Motion::Lio => (
             product(
                 rz(t * 0.6.into() + (t * 1.3.into()).sin() * 0.2.into()),
                 ry((t * 0.7.into()).sin() * 0.15.into()),
@@ -154,7 +176,10 @@ fn lidar_pose(t: f64, motion: Motion) -> Pose {
                 Jet::from(1.2) + (t * 0.3.into()).sin() * 0.1.into(),
             ],
         ),
-    };
+    }
+}
+fn lidar_pose(t: f64, motion: Motion) -> Pose {
+    let (base, head, p) = parts(t, motion);
     let offset = apply(base, [0.25.into(), 0.into(), 0.2.into()]);
     Pose {
         p: std::array::from_fn(|i| p[i] + offset[i]),
@@ -242,6 +267,88 @@ impl Scene for Room {
         })
     }
 }
+// Physical edges only: body pose relative to the world remains scoring-only.
+pub fn transforms(
+    time_ns: u64,
+    motion: Motion,
+) -> (
+    mid360_sim::frames::FrameTransform,
+    mid360_sim::frames::FrameTransform,
+) {
+    use mid360_sim::frames::{FrameTransform, Transform};
+    let (_, head, _) = parts((time_ns - EPOCH_NS) as f64 * 1e-9, motion);
+    let head = matrix_transform([0.25, 0., 0.2], head);
+    (
+        FrameTransform {
+            parent: "example_body".into(),
+            child: "example_lidar".into(),
+            time_ns,
+            transform: head,
+        },
+        FrameTransform {
+            parent: "example_lidar".into(),
+            child: "example_imu".into(),
+            time_ns: 0,
+            transform: Transform {
+                translation_m: [0.04, -0.02, 0.015],
+                rotation_xyzw: [0., 0.05f64.sin(), 0., 0.05f64.cos()],
+            },
+        },
+    )
+}
+fn matrix_transform(p: [f64; 3], r: Matrix) -> mid360_sim::frames::Transform {
+    // Stable matrix-to-quaternion conversion, including rotations near pi.
+    let m = r.map(|row| row.map(|v| v.v));
+    let candidates = [
+        1. + m[0][0] - m[1][1] - m[2][2],
+        1. - m[0][0] + m[1][1] - m[2][2],
+        1. - m[0][0] - m[1][1] + m[2][2],
+        1. + m[0][0] + m[1][1] + m[2][2],
+    ];
+    let k = (0..4)
+        .max_by(|a, b| candidates[*a].total_cmp(&candidates[*b]))
+        .unwrap();
+    let v = candidates[k].sqrt() * 0.5;
+    let d = 4. * v;
+    let q = match k {
+        0 => [
+            v,
+            (m[0][1] + m[1][0]) / d,
+            (m[0][2] + m[2][0]) / d,
+            (m[2][1] - m[1][2]) / d,
+        ],
+        1 => [
+            (m[0][1] + m[1][0]) / d,
+            v,
+            (m[1][2] + m[2][1]) / d,
+            (m[0][2] - m[2][0]) / d,
+        ],
+        2 => [
+            (m[0][2] + m[2][0]) / d,
+            (m[1][2] + m[2][1]) / d,
+            v,
+            (m[1][0] - m[0][1]) / d,
+        ],
+        _ => [
+            (m[2][1] - m[1][2]) / d,
+            (m[0][2] - m[2][0]) / d,
+            (m[1][0] - m[0][1]) / d,
+            v,
+        ],
+    };
+    mid360_sim::frames::Transform {
+        translation_m: p,
+        rotation_xyzw: q,
+    }
+}
+pub fn imu_truth(time_ns: u64, motion: Motion) -> mid360_sim::frames::Transform {
+    let pose = lidar_pose((time_ns - EPOCH_NS) as f64 * 1e-9, motion);
+    let offset = apply(pose.r, [0.04.into(), (-0.02).into(), 0.015.into()]);
+    matrix_transform(
+        std::array::from_fn(|i| pose.p[i].v + offset[i].v),
+        product(pose.r, ry(0.1.into())),
+    )
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -270,5 +377,45 @@ mod tests {
                 assert!((spinning.specific_force_m_s2[axis] - expected_f[axis]).abs() < 1e-11);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod frame_tests {
+    use super::*;
+    #[test]
+    fn dynamic_edges_reconstruct_sensor_chain_without_world_tf() {
+        for time_ns in [EPOCH_NS, EPOCH_NS + 300_000_000, EPOCH_NS + 3_000_000_000] {
+            let t = (time_ns - EPOCH_NS) as f64 * 1e-9;
+            let (base, _, p) = parts(t, Motion::Articulated);
+            let (head, imu) = transforms(time_ns, Motion::Articulated);
+            let body = matrix_transform(p.map(|v| v.v), base);
+            for q in [[0., 0., 0.], [1., 2., 3.]] {
+                let chain = body.point(head.transform.point(q));
+                let expected = world_point(time_ns, q, Motion::Articulated);
+                for axis in 0..3 {
+                    assert!((chain[axis] - expected[axis]).abs() < 1e-12);
+                }
+            }
+            let expected = imu_truth(time_ns, Motion::Articulated);
+            let origin = body.point(head.transform.point(imu.transform.translation_m));
+            for (a, b) in origin.iter().zip(expected.translation_m) {
+                assert!((a - b).abs() < 1e-12);
+            }
+        }
+        assert_ne!(
+            transforms(EPOCH_NS, Motion::Articulated)
+                .0
+                .transform
+                .rotation_xyzw,
+            transforms(EPOCH_NS + 300_000_000, Motion::Articulated)
+                .0
+                .transform
+                .rotation_xyzw
+        );
+        assert_eq!(
+            transforms(EPOCH_NS, Motion::Articulated).1,
+            transforms(EPOCH_NS + 300_000_000, Motion::Articulated).1
+        );
     }
 }

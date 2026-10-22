@@ -20,6 +20,10 @@ struct Options {
     chunk_ns: u64,
     evaluate: bool,
     ros: bool,
+    tf: bool,
+    pointcloud: bool,
+    truth: Option<String>,
+    reliable: bool,
 }
 fn options() -> Result<Options> {
     let mut opt = Options {
@@ -29,6 +33,10 @@ fn options() -> Result<Options> {
         chunk_ns: 7_812_500,
         evaluate: false,
         ros: false,
+        tf: false,
+        pointcloud: false,
+        truth: None,
+        reliable: false,
     };
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -39,9 +47,13 @@ fn options() -> Result<Options> {
             "--chunk-ns" => opt.chunk_ns = args.next().ok_or("missing chunk duration")?.parse()?,
             "--evaluate" => opt.evaluate = true,
             "--ros" => opt.ros = true,
+            "--tf" => opt.tf = true,
+            "--reliable" => opt.reliable = true,
+            "--pointcloud" => opt.pointcloud = true,
+            "--truth" => opt.truth = Some(args.next().ok_or("missing truth path")?),
             "--help" => {
                 println!(
-                    "synchronized [--evaluate] [--motion stationary|yaw|articulated] [--frames 20] [--stride 1] [--chunk-ns 7812500] [--ros]"
+                    "synchronized [--evaluate] [--motion stationary|yaw|articulated|lio] [--frames 20] [--stride 1] [--chunk-ns 7812500] [--ros] [--tf] [--pointcloud] [--truth NEW_FILE] [--reliable]"
                 );
                 std::process::exit(0);
             }
@@ -127,6 +139,9 @@ fn acquire(
                     .map(|i| fixture::imu(packet_start + i * IMU_PERIOD_NS, motion))
                     .collect();
                 for sample in &inertial {
+                    let (moving, fixed) = fixture::transforms(sample.time_ns, motion);
+                    moving.validate()?;
+                    fixed.validate()?;
                     sample.validate()?;
                 }
                 for p in &pending.points {
@@ -230,14 +245,40 @@ fn main() -> Result<()> {
         );
         return Ok(());
     }
-    let mut output = RosOutput::new(opt.ros)?;
+    // Truth is written separately for scoring, never sent through ROS.
+    let mut truth = opt
+        .truth
+        .as_ref()
+        .map(|p| {
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(p)
+        })
+        .transpose()?;
+    let mut output = RosOutput::new(&opt)?;
     let metrics = acquire(
         opt.motion,
         opt.frames,
         opt.stride,
         opt.chunk_ns,
         Effects::default(),
-        |scan, imu, end| output.publish(scan, imu, end),
+        |scan, imu, end| {
+            if let Some(file) = &mut truth {
+                use std::io::Write;
+                for sample in imu {
+                    let pose = fixture::imu_truth(sample.time_ns, opt.motion);
+                    let [x, y, z] = pose.translation_m;
+                    let [qx, qy, qz, qw] = pose.rotation_xyzw;
+                    writeln!(
+                        file,
+                        "{} {x:.12} {y:.12} {z:.12} {qx:.12} {qy:.12} {qz:.12} {qw:.12}",
+                        sample.time_ns
+                    )?;
+                }
+            }
+            output.publish(scan, imu, end, opt.motion)
+        },
     )?;
     print_metrics(opt.motion, opt.stride, &metrics);
     output.finish();
@@ -249,6 +290,8 @@ struct RosOutput {
         mid360_sim::publisher::LivoxPublisher,
         mid360_sim::publisher::ImuPublisher,
     )>,
+    cloud: Option<mid360_sim::publisher::PointCloudPublisher>,
+    tf: Option<mid360_sim::publisher::TransformPublisher>,
     _node: Option<rclrs::Node>,
     _executor: Option<rclrs::Executor>,
     _context: Option<rclrs::Context>,
@@ -256,33 +299,67 @@ struct RosOutput {
 }
 #[cfg(feature = "ros2")]
 impl RosOutput {
-    fn new(enabled: bool) -> Result<Self> {
+    fn new(opt: &Options) -> Result<Self> {
         use rclrs::CreateBasicExecutor;
         let mut out = Self {
             publishers: None,
+            cloud: None,
+            tf: None,
             _node: None,
             _executor: None,
             _context: None,
             start: Instant::now(),
         };
-        if enabled {
+        if opt.ros {
             let context = rclrs::Context::new(std::iter::empty::<String>(), Default::default())?;
             let executor = context.create_basic_executor();
             let node = executor.create_node("mid360_synchronized_example")?;
             let lidar = mid360_sim::publisher::LivoxPublisher::new(&node, "/synchronized/lidar")?;
-            let imu = mid360_sim::publisher::ImuPublisher::new(
+            let qos = if opt.reliable {
+                rclrs::QoSProfile::topics_default()
+            } else {
+                rclrs::QoSProfile::sensor_data_default()
+            };
+            let imu = mid360_sim::publisher::ImuPublisher::new_with_qos(
                 &node,
                 "/synchronized/imu",
                 "example_imu",
+                qos.keep_last(200),
             )?;
+            if opt.pointcloud {
+                out.cloud = Some(mid360_sim::publisher::PointCloudPublisher::new_with_qos(
+                    &node,
+                    "/synchronized/points",
+                    qos.keep_last(5),
+                )?);
+            }
+            if opt.tf {
+                out.tf = Some(mid360_sim::publisher::TransformPublisher::new(&node)?);
+            }
             let wait = Instant::now();
-            while (lidar.subscription_count()? == 0 || imu.subscription_count()? == 0)
+            while ((if let Some(cloud) = &out.cloud {
+                cloud.subscription_count()?
+            } else {
+                lidar.subscription_count()?
+            }) == 0
+                || imu.subscription_count()? == 0)
                 && wait.elapsed() < std::time::Duration::from_secs(5)
             {
                 std::thread::sleep(std::time::Duration::from_millis(10));
             }
-            if lidar.subscription_count()? == 0 || imu.subscription_count()? == 0 {
+            if (if let Some(cloud) = &out.cloud {
+                cloud.subscription_count()?
+            } else {
+                lidar.subscription_count()?
+            }) == 0
+                || imu.subscription_count()? == 0
+            {
                 return Err("both LiDAR and IMU subscribers are required within 5 seconds".into());
+            }
+            if let Some(tf) = &out.tf {
+                let (moving, fixed) = fixture::transforms(EPOCH_NS, opt.motion);
+                tf.publish(&[fixed], true)?;
+                tf.publish(&[moving], false)?;
             }
             lidar.publish_clock(EPOCH_NS)?;
             out.publishers = Some((lidar, imu));
@@ -293,11 +370,24 @@ impl RosOutput {
         }
         Ok(out)
     }
-    fn publish(&mut self, scan: &RollingFrame, imu: &[ImuSample], end: u64) -> Result<()> {
+    fn publish(
+        &mut self,
+        scan: &RollingFrame,
+        imu: &[ImuSample],
+        end: u64,
+        motion: Motion,
+    ) -> Result<()> {
         if let Some((lidar, publisher)) = &self.publishers {
             let target = std::time::Duration::from_nanos(end - EPOCH_NS);
             if let Some(wait) = target.checked_sub(self.start.elapsed()) {
                 std::thread::sleep(wait);
+            }
+            if let Some(tf) = &self.tf {
+                let edges: Vec<_> = imu
+                    .iter()
+                    .map(|s| fixture::transforms(s.time_ns, motion).0)
+                    .collect();
+                tf.publish(&edges, false)?;
             }
             for sample in imu {
                 publisher.publish(sample)?;
@@ -310,6 +400,9 @@ impl RosOutput {
                 },
             )?;
             lidar.publish(&packet)?;
+            if let Some(cloud) = &self.cloud {
+                cloud.publish(&packet)?;
+            }
             lidar.publish_clock(end)?;
         }
         Ok(())
@@ -324,15 +417,22 @@ impl RosOutput {
 struct RosOutput;
 #[cfg(not(feature = "ros2"))]
 impl RosOutput {
-    fn new(enabled: bool) -> Result<Self> {
-        if enabled {
+    fn new(opt: &Options) -> Result<Self> {
+        if opt.ros {
             Err("--ros requires --features ros2 and a sourced runtime".into())
         } else {
             Ok(Self)
         }
     }
-    fn publish(&mut self, scan: &RollingFrame, _imu: &[ImuSample], _end: u64) -> Result<()> {
-        let _ = LivoxPacket::from_scan(scan, &LivoxConfig::default())?;
+    fn publish(
+        &mut self,
+        scan: &RollingFrame,
+        _imu: &[ImuSample],
+        _end: u64,
+        _motion: Motion,
+    ) -> Result<()> {
+        let packet = LivoxPacket::from_scan(scan, &LivoxConfig::default())?;
+        let _ = mid360_sim::pointcloud::encode(&packet)?;
         Ok(())
     }
     fn finish(&self) {}

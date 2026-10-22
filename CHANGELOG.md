@@ -6,6 +6,9 @@
 
 ### Rust API
 
+- Add dependency-free physical transform and timed PointCloud2 encoders, plus
+  optional rclrs static/dynamic TF and PointCloud2 publishers with selectable QoS.
+
 - Add the dependency-free caller-provided `imu::ImuSample` SI contract and optional
   rclrs `ImuPublisher`; never synthesize orientation or IMU motion in the core.
 
@@ -14,6 +17,10 @@
   zero-noise directions. Validate edge occlusion and per-emission rotating mounts.
 
 ### Examples and validation
+
+- Add rotating physical TF and identical timed PointCloud2 to the synchronized
+  fixture, plus an optional external TriLIO ROS regression on the fixture and
+  a fresh RM CAD host, with separate truth scoring and process watchdogs.
 
 - Add a self-contained synchronized LiDAR/IMU kinematic example with rotating
   mounts, independent lever-arm checks and native ROS delivery validation.

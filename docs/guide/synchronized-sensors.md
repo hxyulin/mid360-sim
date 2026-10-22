@@ -68,7 +68,9 @@ The example waits up to five seconds for **both** subscribers. It publishes
 `/synchronized/lidar` as Livox `CustomMsg`, `/synchronized/imu` as
 `sensor_msgs/Imu`, and one simulation `/clock`. Use `example_lidar` and
 `example_imu` as the physical frame IDs and configure the example extrinsic
-explicitly in the consumer. No TF or odometry is published. Use simulation time
+explicitly in the consumer. Optional `--tf` publishes physical relative transforms,
+and `--pointcloud` adds standard clouds; see the [navigation demo](navigation-demo.md).
+No ground-truth world transform or odometry is published. Use simulation time
 and best-effort-compatible QoS; IMU subscriptions should have depth at least 200
 because each 100 ms bundle releases 20 IMU messages before its LiDAR packet.
 Cross-topic callback order is not guaranteed; consumers must buffer by stamp.
