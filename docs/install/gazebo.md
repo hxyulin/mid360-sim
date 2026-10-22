@@ -120,7 +120,8 @@ Regenerate the C++ optical table and cross-language fixtures with:
 cargo run --quiet --locked --example export_gazebo_model > integrations/gazebo/include/mid360/model.hh
 ```
 
-Validated on Talos with gz-sim 8.15.0 and gz-physics DART 7.8.0. At stride 1,
+Validated on Linux with a Ryzen 9 9950X3D, gz-sim 8.15.0 and
+gz-physics DART 7.8.0. At stride 1,
 the final test validated 400,000 points in 20 native messages over 2,000
 1 ms physics steps (two simulated seconds); the server run took 1.945 s wall
 time. Stride 3 validated 126,673 points in 19 complete messages, and stride
@@ -145,7 +146,7 @@ iteration count, and separately measures a valid sensor-disabled SDF world.
 It omits expensive subscriber-side per-point validation during timing, while
 ordinary native tests still validate points against analytic enclosure hits.
 
-Three final Talos trials gave these median times for two simulated seconds:
+Three final trials on the same system gave these median times for two simulated seconds:
 
 | Case | Wall time | Real-time factor |
 |---|---:|---:|

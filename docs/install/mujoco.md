@@ -10,7 +10,9 @@ python -m unittest discover -s integrations/python/tests -v
 python integrations/python/benchmark.py
 ```
 
-Alternatively, install the wheel from a checksummed GitHub release:
+If a checksummed release wheel is available, install it with the command below.
+The current candidate has not been published as a tagged release; use the source
+installation above. Consult [distribution](../distribution.md) for availability.
 
 ```sh
 python -m pip install 'mid360_sim_adapters-0.1.0-py3-none-any.whl[mujoco]'
@@ -100,7 +102,7 @@ Axiom's benchmark measured **4.21 ms median / 4.77 ms p95 per 20,000 rays**
 (30 measurements after 5 warmups) for NumPy generation, native queries and owned
 output arrays in a static six-wall room. It excludes physics stepping,
 rendering and transport, and is not an arena-scale result. It is not a
-controlled CPU/GPU comparison with the different Talos Isaac benchmark.
+controlled CPU/GPU comparison with the separately measured Linux/RTX 5090 Isaac benchmark.
 
 See [MuJoCo's native ray API](https://mujoco.readthedocs.io/en/stable/APIreference/APIfunctions.html#mj-multiray)
 for engine semantics. MuJoCo/NumPy remain separately installed dependencies;

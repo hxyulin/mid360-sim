@@ -9,8 +9,8 @@ nominal scan law, but its acquisition and output capabilities differ.
 |---|---|---|---|
 | Rust | [Core library](../install/rust.md) | Scene implementation owns each emission | Optional separate publisher |
 | ROS 2 | [Room demo](../install/ros2.md) | Analytic per-emission sensor pose | CustomMsg + /clock |
-| Isaac | [Kit extension](../install/isaac-sim.md) | Sensor interpolation; scene frozen | Caller bridge from Livox fields |
-| MuJoCo | [Python package](../install/mujoco.md) | Pose and geometry frozen per call | Caller bridge from Livox fields |
+| Isaac | [Kit extension](../install/isaac-sim.md) | Per-ray sensor interpolation; per-step geometry or explicit history/partition modes | Caller bridge from Livox fields |
+| MuJoCo | [Python package](../install/mujoco.md) | Held poses by default; optional rolling sensor poses; geometry current per call | Caller bridge from Livox fields |
 | Gazebo | [System plugin](../install/gazebo.md) | Physics-step scene snapshots | Native Gazebo messages |
 
 ## Acquisition comes before publishing
@@ -23,9 +23,23 @@ Keep global sample indices continuous, including misses. Publish local XYZ with
 its original acquisition time; do not pre-deskew it if the consumer is testing
 motion compensation. See the [acquisition contract](acquisition.md).
 
+## Choose a motion/performance policy
+
+Default settings favor straightforward scene integration. Isaac can defer
+readback without coarsening acquisition, or batch tracing with explicit static
+geometry and moving partitions. MuJoCo's `scan_rolling()` trades extra CPU work
+for per-emission sensor rotation and bounded origin approximation. Gazebo's
+physics-step snapshots improve with shorter steps. See the
+[acquisition contract](acquisition.md) and [measured tradeoffs](../performance-tradeoffs.md)
+before applying a fast static-scene configuration to a moving robot.
+
 ## Source or release
 
 Install from a checkout while developing adapters. Use the checksummed
 [release artifacts](../distribution.md) for pinned deployments. The Python
 package is not currently published on PyPI and the Rust package is not currently
 published on crates.io. Avoid an unqualified registry install of either name.
+Guides track `main`; advanced history/partition/rolling APIs describe the current
+checkout and may be newer than a downloaded archive. Match an archive to its
+`release.json` source revision rather than assuming the shared 0.1.0 package
+version contains every current feature.

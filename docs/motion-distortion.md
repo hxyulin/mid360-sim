@@ -28,24 +28,28 @@ that revision, not every Livox simulator or fork.
 |---|---|---|
 | Real hardware | Continuous physical motion | Continuous physical motion |
 | Rust core / analytic ROS demo | Caller query per emission; demo evaluates continuous pose | Caller query per emission; demo static room |
-| Isaac Warp adapter | Linear position + quaternion SLERP per emission | One rigid scene capture per batch |
-| MuJoCo adapter | One current site pose per call | Current mjData per call |
+| Isaac Warp adapter | Per-emission sensor interpolation | Per-step capture or explicit static/dynamic histories |
+| MuJoCo adapter | Held site by default; optional rolling sensor poses | Current mjData per call |
 | Gazebo adapter | Current link pose per physics step | Current physics geometry per step |
 
 Isaac's first extension callback has no earlier pose and initializes history.
-Subsequent callbacks require current physics poses written to USD, not Fabric-only
-transforms. A rotating off-center mount follows a curved translation path;
+The default pose reader needs current physics poses written to USD. A trusted
+native reader must explicitly synchronize mounted extrinsics and callback timing;
+Fabric-only transforms are not read automatically. A rotating off-center mount
+follows a curved translation path;
 linear endpoint interpolation only approximates that curve. Sharp turns, contacts,
 and geometry motion require shorter batches or time-resolved rigid captures.
 In particular, interpolating the sensor while freezing the moving robot body can
 produce self-occlusion artifacts. Excluding all robot geometry conceals this
 error but also removes real self-occlusion.
 
-MuJoCo's whole 100 ms call is not rolling acquisition. Querying 200 emissions
-after each 1 ms physics update, while retaining original times and aggregating
-for publication, approximates it. Gazebo already accumulates physics-step
-queries into approximately 100 ms publications. Neither currently interpolates
-poses or geometry within a physics step.
+A whole 100 ms default MuJoCo `scan()` is a snapshot. Querying after short
+physics steps and aggregating for publication approximates rolling acquisition;
+`scan_rolling()` additionally interpolates sensor rotation and uses bounded
+translation-origin groups. It still queries current `mjData`, not historical
+obstacle geometry. Gazebo accumulates physics-step queries into approximately
+100 ms publications and does not interpolate within-step sensor/scene motion.
+See the [current mode contract](guide/acquisition.md).
 
 ## Reproducible controlled comparison
 
@@ -90,14 +94,16 @@ The owner recording is stationary. It establishes emission timing and scan
 shape, not behavior under motion. Public moving scans used in the optical-fit
 checks also have no independently verified trajectory in those checks. We have
 not established hardware-equivalent motion distortion from these data.
-The current Isaac native test covers rolling translation and a separate fixed
-rotated mount; it does not validate the full moving-robot callback path against
-real hardware or time-resolved moving obstacles.
+Current Isaac native tests cover rolling translation/rotation, moving optical
+partitions, rigid histories and CAD-root occlusion. They do not establish full
+articulated-robot or hardware-equivalent acquisition. See the
+[validation guide](guide/validation.md) and [native replay](backend-ground-truth.md).
 
 For navigation/LIO, prioritize coherent per-emission sensor poses, scene motion
 and sensor/IMU timestamps over reproducing an individual device's exact scan
-phase. Next validation should use a controlled translating/rotating rig or a
-moving dataset with independent ground truth and known LiDAR/IMU extrinsics:
+phase. Independent MoCap replay now exercises the native adapters in synthetic
+geometry. The remaining hardware test needs a controlled rig or a moving
+recording with known scene geometry and LiDAR/IMU extrinsics:
 compare raw wall bending, then residual after identical deskew. Publish the same
 trajectory's accelerometer/gyro data with explicit gravity and bias conventions.
 IMU extrinsics, time offsets, missing returns, range/material response and

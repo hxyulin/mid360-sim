@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+### Documentation
+
+- Refresh capability/validation guides for native official-plugin execution,
+  MuJoCo rolling scans and Isaac history/partition modes; separate accuracy metrics.
+- Move historical Isaac benchmarks out of installation instructions, link the
+  current tradeoff report, and clarify source/release and Pages deployment setup.
+
 ### Integrations
 
 - Add owned bulk pose histories for Isaac static-scene tracing, reducing

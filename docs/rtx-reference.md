@@ -14,6 +14,20 @@ MID-360 pattern or its coverage distribution**. Our ordinary Warp adapter uses
 its unchanged four-lane, evolving nominal optics. A rotary scan repeats every
 100 ms; our representative nominal model has an 18.2-hour common cycle.
 
+## Which experiment to use
+
+This page preserves the earlier **constant-velocity room experiment**. Its small
+Motion BVH residual is not representative of changing-velocity MoCap replay.
+The later [measured-motion experiment](backend-ground-truth.md#rtx-with-motion-bvh)
+checks 10/100/1000 Hz scene updates: RMS is 152.24 / 9.400 / 2.788 mm respectively.
+Use the [current runtime/accuracy report](performance-tradeoffs.md) for those
+whole-loop runtimes and the optimized Warp comparison.
+
+The replay harness now defaults to a render writer so it captures all 20 scans;
+its earlier polling mode missed two at 1 kHz. The constant-velocity polling
+results below remain evidence of that harness's scheduling, not a latency or
+precision guarantee for every RTX integration.
+
 ## Motion matters more than the backend name
 
 Current NVIDIA documentation describes [Motion BVH](https://docs.isaacsim.omniverse.nvidia.com/latest/sensors/isaacsim_sensors_rtx.html)
@@ -51,7 +65,7 @@ retained RTX frame's motion history begins at 902 ms although emission stamps
 begin at 900 ms; this boundary discrepancy is visible in the saved GMO poses.
 The harness does not attribute every residual to that discrepancy.
 
-In short room runs on Talos (RTX 5090), RTX with Motion BVH achieved roughly
+In short room runs on the RTX 5090 system, RTX with Motion BVH achieved roughly
 6.7–7.4× real time; our static segmented Warp mode achieved roughly 6.0–6.1×.
 These are whole measured loops including physics, rendering and host copies,
 but exclude initialization, warmup, offline analysis and report writing.

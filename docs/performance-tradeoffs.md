@@ -8,9 +8,14 @@ rolling-motion agreement in this static-room test. Ordinary USD writeback,
 MuJoCo rolling acquisition and our current Gazebo Harmonic integration do not
 beat that official runtime. No production defaults were changed to hide this.
 
+For current API capabilities and the definitions of each accuracy metric, see
+the [validation guide](guide/validation.md). Historical Isaac timing/scaling
+experiments are retained [separately](isaac-performance.md); their settings differ
+from the comparison below.
+
 ## What was measured
 
-Talos: Ryzen 9 9950X3D, RTX 5090, NVIDIA driver 615.78; Isaac Sim 6.2.0 / Warp
+Benchmark hardware: Ryzen 9 9950X3D, RTX 5090, NVIDIA driver 615.78; Isaac Sim 6.2.0 / Warp
 1.17, MuJoCo 3.7.0 / NumPy 2.5.4, Gazebo Classic 9 / ROS Melodic, and Gazebo
 Harmonic 8.15. A [two-second high-motion MoCap segment](backend-ground-truth.md)
 drives the sensor inside an exact six-wall enclosure. All nominal paths emit

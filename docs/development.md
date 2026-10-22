@@ -13,7 +13,7 @@ cargo fmt --all -- --check
 cargo test --locked
 cargo clippy --all-targets --locked -- -D warnings
 cargo deny --config deny.toml check
-python3 scripts/check-repository.py
+python scripts/check-repository.py
 ```
 
 The repository check compares bundled nominal model copies against Rust exports,
@@ -62,7 +62,10 @@ in the evidence pages and keep the README focused on the first useful task.
 
 The documentation workflow builds on pull requests and deploys main through
 GitHub Pages Actions. Configure **Settings → Pages → Source → GitHub Actions**
-once when enabling hosting. The prepared site URL is
+once when enabling hosting. If `configure-pages` fails with `Get Pages site
+failed` / HTTP 404, check that setting: a successful build/artifact upload alone
+does not create a site. The deploy job needs `pages: write` and `id-token: write`;
+repository permissions may be needed for initial enablement. The prepared site URL is
 `https://hxyulin.github.io/mid360-sim/`; a local build is not a deployment.
 
 ## Distribution
@@ -71,3 +74,20 @@ Follow [distribution](distribution.md) for hash-locked packaging and inspection.
 Version fields in Cargo, Python, Kit and CMake must agree. CI runs core checks,
 Python adapter tests, a native Gazebo container and the documentation build.
 Isaac's GPU tests and the documented ROS native checks require their runtime.
+
+## Documentation maintenance
+
+Keep current API capabilities in the installation/acquisition guides, accuracy
+metric definitions in the validation guide, and experiments in evidence pages.
+The [runtime/accuracy report](performance-tradeoffs.md) is the current comparison;
+[Isaac architecture experiments](isaac-performance.md) preserve earlier scopes.
+When a native experiment supersedes an offline proxy, update the landing guides
+and the original page's summary; label the old result rather than erasing it.
+Separate physical specifications, optical fit errors, motion-policy displacement,
+native synthetic-scene range errors and whole-application throughput.
+
+Run the production build, link check and browser checks above after edits. These
+verify navigation, local search and mobile layout. Also compare code examples
+and mode limits against the current implementation; passing link checks cannot
+establish semantic freshness. Document source versus release availability without
+implying that a local candidate artifact has been uploaded.

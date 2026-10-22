@@ -65,6 +65,7 @@ export default defineConfig({
         { text: 'Recorded-motion results', link: '/motion-comparison-results' },
         { text: 'Backend MoCap replay', link: '/backend-ground-truth' },
         { text: 'Runtime / accuracy tradeoffs', link: '/performance-tradeoffs' },
+        { text: 'Isaac architecture / scaling', link: '/isaac-performance' },
         { text: 'Native RTX comparison', link: '/rtx-reference' },
         { text: 'Official reference', link: '/official-reference' },
       ] },

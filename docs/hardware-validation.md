@@ -15,7 +15,7 @@ remain the validation of the original official-table profile.
 
 The owner supplied a native Livox SDK callback capture, `stationary_01.bin`,
 recorded with the sensor untouched on a table for about 300 s. It was fetched
-from Metis (the supplied macOS path exists there, not on Talos). SHA-256 matched
+from the owner's capture machine. SHA-256 matched
 before/after transfer:
 
 ```text
@@ -102,7 +102,9 @@ held-out samples from seconds 1-4 it still had roughly 2.9-degree angular RMS
 error. This is a local numerical alignment, not a proven global best fit.
 It cannot support the sub-0.16-degree accuracy previously measured **against
 Livox's published CSV**. That earlier held-out result remains valid for the CSV,
-not for this hardware capture. No runtime coefficients have been replaced.
+not for this hardware capture. This initial audit did not replace coefficients;
+the later [hardware-derived fit](hardware-fit.md) and representative nominal
+profile are separate developments.
 
 ## Stationarity and limitations
 

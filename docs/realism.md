@@ -25,7 +25,7 @@ model or per-ray calibrated clock. The table spans four nominal seconds at
 200,000/s; its xacro defaults instead to 24,000 samples at 10 Hz (3.33 s to wrap).
 The source has no cycle-dependent quarter reconstruction or phase offset.
 
-Our fit uses four interleaved lanes and two rational-clock hypotheses,
+The historical `official-table` fit uses four interleaved lanes and two rational-clock hypotheses,
 2189/12 and 10 Hz, with 22 Fourier pairs per lane/angle. It stores 2,880 bytes
 of coefficients. Training uses 10,812 points from the first two seconds;
 held-out validation covers all 400,000 remaining points. Lane RMS errors are
@@ -55,6 +55,10 @@ reconstruction accuracy must not be treated as future-phase prediction.
 
 ## Implemented here
 
+The following effects belong to the Rust core unless a simulator adapter is
+named explicitly. Adapter Livox fields do not imply that all core noise and
+material options are implemented in that backend.
+
 - Per-emission scene queries with explicit times and local FLU rays. A backend
   can supply interpolation of real robot/obstacle motion and self-occlusion.
   The standalone demo performs continuous analytic sensor motion; arbitrary
@@ -72,10 +76,12 @@ reconstruction accuracy must not be treated as future-phase prediction.
 
 ## Highest-value next work
 
-1. **Live sensor geometry backend.** Use optical meshes independent of gameplay
-   collision proxies, including chassis self-shadowing and moving mechanisms.
-   Game collision simplification can otherwise erase rails or close openings.
-   Avoid a second dynamics world: query timestamped scene captures.
+1. **Full moving-robot validation.** Live backends now exist. Isaac supports
+   optical meshes, explicit static/dynamic partitions and retained rigid-object
+   transforms, with synthetic and CAD-scene checks. Extend this to articulated
+   robot motion, mechanisms, coherent native poses and publication costs.
+   MuJoCo/Gazebo query native physics geometry; collision simplification can erase
+   optical detail. Keep one dynamics world and explicit acquisition histories.
 2. **IMU + synchronization.** Navigation pipelines such as LiDAR-inertial odometry
    need timestamped gyro/accelerometer signals with noise, bias and drift, correct
    extrinsics, gravity and clock relationships. Do not publish perfect poses as
@@ -87,9 +93,12 @@ reconstruction accuracy must not be treated as future-phase prediction.
 4. **Beam/edge behaviour.** A small ray bundle can model partial hits/edge mixing,
    at a multiplication of raycast cost. Validate the footprint and return-selection
    policy against recordings before claiming MID-360 fidelity.
-5. **Long recordings.** Capture more than 12 s to assess motor drift, exact lane
-   order/timing, long-period recurrence and correlation. The official four-second
-   table cannot validate these. Offer reference CSV replay for comparison.
+5. **More devices and operating conditions.** The existing 300 s owner capture
+   and independent recordings already exceed the official table's four seconds.
+   More devices, temperatures and synchronized moving captures are needed to
+   separate clock drift, device variation, lane timing and return correlation.
+   The 18.2-hour nominal cycle remains a simulation choice, not a measured
+   hardware recurrence or a prediction of an individual device's future phase.
 6. **Transport effects.** Optional latency/jitter, loss and reordering belong in
    publication/transport scheduling without changing acquisition timestamps.
 
@@ -98,5 +107,8 @@ interference and false alarms are lower priority for an indoor arena. Neither
 this package nor the original simulator currently provides these calibrated
 hardware effects.
 
-See [motion distortion](motion-distortion.md) for the per-backend acquisition
-comparison, reproducible rolling-motion errors and moving-hardware validation gaps.
+See the [acquisition contract](guide/acquisition.md) for current backend modes,
+[validation guide](guide/validation.md) for accuracy definitions, and
+[runtime/accuracy report](performance-tradeoffs.md) for measured native results.
+The [controlled-motion experiment](motion-distortion.md) retains the earlier
+analytic policy checks; it is a separate metric from native replay.

@@ -52,13 +52,19 @@ extension ZIP and source bundles. No simulator runtime or recorded dataset is bu
 ## Motion and realism
 
 Raw points stay in the sensor frame at their own emission time; consumers own
-deskewing. Isaac interpolates sensor poses per ray but freezes scene geometry
-per batch. MuJoCo holds the scene per call; Gazebo holds it per physics step.
-Use short acquisition batches independently of your publication interval.
+deskewing. Isaac interpolates sensor poses per ray and supports per-step scene
+capture, static tracing and explicit moving-geometry partitions. MuJoCo offers
+held-pose queries or optional rolling sensor poses; its geometry stays current
+per call. Gazebo samples the physics scene per step. Acquisition and publication
+intervals are independent; batching output does not require freezing acquisition.
 
 The [validation guide](docs/guide/validation.md) distinguishes hardware-derived
-scan fits, controlled tests and motion-capture comparisons. Moving self-geometry,
-synchronized IMU output and calibrated material response remain open work.
+scan fits, controlled tests and motion-capture comparisons. The
+[runtime/accuracy report](docs/performance-tradeoffs.md) compares actual native
+backends, including the official plugin, with explicit measurement scopes.
+Full articulated-robot validation, synchronized IMU output and calibrated
+material response remain open work. Guides track the current source; check a
+release archive's source revision before relying on newer APIs.
 
 ## Development
 

@@ -7,6 +7,24 @@ same independently measured motion. The reference combines **real MoCap poses
 with exact synthetic scene geometry**. It does not compare generated returns
 against a surveyed reconstruction of the real recording environment.
 
+## Current versus baseline results
+
+The protocol and original held-pose/ordinary-Warp results below are retained
+for reproduction. Subsequent implementations add MuJoCo `scan_rolling()` and
+Isaac bulk history, without changing the reference:
+
+| Current addition | Range RMS | Absolute p95 | Maximum |
+|---|---:|---:|---:|
+| MuJoCo rolling sensor pose, 0.5 mm origin bound | 0.294 mm | 0.381 mm | 8.697 mm |
+| Isaac bulk static pose history | 0.251 mm | 0.106 mm | 8.692 mm |
+
+MuJoCo interpolates rotation per emission and groups translation origins; its
+tolerance is an origin-displacement bound, not a range-error guarantee.
+Geometry stays current for the call. Isaac bulk tracing changes scheduling and
+input packing, retaining the same boundary-pose interpolation and static scene.
+The [current tradeoff report](performance-tradeoffs.md) adds runtimes, actual
+native official-plugin execution, RTX rates and all cross-backend scope limits.
+
 ## Reference and protocol
 
 The [JEPLO EIL_Mask2 audit](motion-ground-truth.md) records source provenance,
@@ -43,7 +61,7 @@ robot dynamics, deliberately isolating sensor acquisition. They do not exercise
 ROS transport, rendered camera imagery, material response, moving obstacles or
 robot self-occlusion. All points hit the enclosure and noise is disabled.
 
-## Results
+## Original baseline results
 
 Every path returned all 400,000 emissions. Distances below are range differences
 relative to the same interpolated MoCap trajectory, in millimetres:
@@ -147,7 +165,9 @@ implemented as native adapter modes. A midpoint is easy for delayed/replayed
 acquisition but may require future poses or an explicit prediction policy in a
 live controller. Sub-batching sensor queries or interpolating emitted sensor
 poses independently of physics integration are the more general next changes.
-They must retain consistent geometry and self-occlusion histories.
+They must retain consistent geometry and self-occlusion histories. The later
+MuJoCo rolling sensor mode implements the sensor-pose option; it does not
+supply moving-obstacle history. See the current-results section above.
 
 ### RTX with Motion BVH
 
@@ -182,9 +202,12 @@ this harness. A `GenericModelOutput` render writer captured all 20 in two runs;
 this is now the replay harness default. Polling remains an explicit diagnostic
 option and incomplete output is rejected unless `--allow-incomplete` is supplied.
 That flag reports missing scans and does not imply a passing coverage test.
-The measured 1 kHz writer run spent about 14 s in rendering/readback for 3.4 s
+The earlier measured 1 kHz writer run spent about 14 s in rendering/readback for 3.4 s
 of simulation, excluding pose setup and physics. Thus the earlier roughly 7x
 real-time result at 10 Hz rendering does not apply to high-rate motion updates.
+The [current runtime table](performance-tradeoffs.md) adds whole-loop measurements
+with explicit synchronous PhysX configuration; do not mix those timers with
+this earlier rendering/readback-only timing.
 
 ### Reproduce the follow-up
 

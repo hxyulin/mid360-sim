@@ -2,10 +2,21 @@
 <!-- Copyright (c) 2026 hxyulin <hxyulin@proton.me> -->
 # Distribution
 
-Version 0.1.0 is the first multi-simulator release candidate. The repository is
-public; release artifacts are prepared locally before a tag is published.
+Version 0.1.0 is the first multi-simulator release candidate. As of the
+2026-10-22 documentation audit, no tagged release or downloadable GitHub release
+has been published. The artifact names below describe prepared outputs, not
+currently available downloads. Use a source checkout for the current APIs.
 See [GitHub releases](https://github.com/hxyulin/mid360-sim/releases) for assets
 that have actually been uploaded. There are no PyPI or crates.io packages yet.
+
+## Match documentation to source
+
+The hosted guides follow `main`. Multiple development commits can retain the
+same 0.1.0 package version; it is not a sufficient feature identifier. Future
+archives record their source revision in `release.json`. Check that revision
+before using newer APIs such as MuJoCo rolling scans, Isaac scene partitions
+or bulk pose histories. Published release notes should identify their included
+features; building an archive locally does not update an existing release.
 
 ## Choose an artifact
 
