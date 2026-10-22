@@ -2,10 +2,10 @@
 <!-- Copyright (c) 2026 hxyulin <hxyulin@proton.me> -->
 # mid360-sim 0.1.0
 
-Draft notes for the first multi-simulator release candidate. These describe the
-current candidate source, not an uploaded release. Match the eventual tag and
-artifact `release.json` to the source revision before publishing. See
-[distribution](https://hxyulin.github.io/mid360-sim/distribution.html) for availability and artifact verification.
+The first multi-simulator release of mid360-sim. Artifacts are built from tag
+`v0.1.0`; each release's `release.json` records its exact source revision and
+checksums. See [distribution](https://hxyulin.github.io/mid360-sim/distribution.html)
+for artifact selection and verification.
 
 ## Included capabilities
 
@@ -30,7 +30,7 @@ artifact `release.json` to the source revision before publishing. See
 
 ## Artifacts and installation
 
-The candidate contains complete source, a Rust source crate, a Python adapter
+The release contains complete source, a Rust source crate, a Python adapter
 wheel, an Isaac extension ZIP and a Gazebo source bundle, plus `release.json`
 and `SHA256SUMS`. No simulator runtime, CAD, recorded dataset or private decoder
 is bundled. Registry publication is separate; no PyPI/crates.io upload is made.
@@ -38,7 +38,7 @@ is bundled. Registry publication is separate; no PyPI/crates.io upload is made.
 Start with [installation](https://hxyulin.github.io/mid360-sim/guide/getting-started.html), choose the
 [appropriate artifact](https://hxyulin.github.io/mid360-sim/distribution.html#choose-an-artifact), and verify its hash
 against `SHA256SUMS` from the same release. Source archives include the guides;
-hosted documentation follows main and may advance after this candidate.
+hosted documentation follows main and may advance after this release.
 
 ## Validation and limits
 
