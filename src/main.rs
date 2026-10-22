@@ -64,15 +64,25 @@ struct Args {
     fast: bool,
 }
 struct Room {
-    roll_rad: f64,
-    pitch_rad: f64,
+    mount_roll_sin_cos: (f64, f64),
+    mount_pitch_sin_cos: (f64, f64),
+}
+impl Room {
+    // Only the demo's immutable mounting angles are cached. Sensor motion is
+    // evaluated at each emission time in nearest_hit.
+    fn new(mount_roll_rad: f64, mount_pitch_rad: f64) -> Self {
+        Self {
+            mount_roll_sin_cos: mount_roll_rad.sin_cos(),
+            mount_pitch_sin_cos: mount_pitch_rad.sin_cos(),
+        }
+    }
 }
 impl Scene for Room {
     fn nearest_hit(&self, time_ns: u64, d: [f64; 3], max: f64) -> Option<SurfaceHit> {
         let t = (time_ns - 1_000_000_000) as f64 / 1e9;
-        let (sr, cr) = self.roll_rad.sin_cos();
+        let (sr, cr) = self.mount_roll_sin_cos;
         let rolled = [d[0], cr * d[1] - sr * d[2], sr * d[1] + cr * d[2]];
-        let (sp, cp) = self.pitch_rad.sin_cos();
+        let (sp, cp) = self.mount_pitch_sin_cos;
         let pitched = [
             cp * rolled[0] + sp * rolled[2],
             rolled[1],
@@ -122,10 +132,10 @@ fn main() -> Result<()> {
         a.mount_roll_deg.is_finite() && a.mount_pitch_deg.is_finite(),
         "mount angles must be finite"
     );
-    let room = Room {
-        roll_rad: a.mount_roll_deg.to_radians(),
-        pitch_rad: a.mount_pitch_deg.to_radians(),
-    };
+    let room = Room::new(
+        a.mount_roll_deg.to_radians(),
+        a.mount_pitch_deg.to_radians(),
+    );
     let context = rclrs::Context::default_from_env()?;
     let executor = context.create_basic_executor();
     let node = executor.create_node("mid360_sim")?;
@@ -195,18 +205,9 @@ mod tests {
     use super::*;
     #[test]
     fn mounting_tilt_rotates_scene_queries() {
-        let upright = Room {
-            roll_rad: 0.,
-            pitch_rad: 0.,
-        };
-        let roll = Room {
-            roll_rad: std::f64::consts::FRAC_PI_2,
-            pitch_rad: 0.,
-        };
-        let pitch = Room {
-            roll_rad: 0.,
-            pitch_rad: std::f64::consts::FRAC_PI_2,
-        };
+        let upright = Room::new(0., 0.);
+        let roll = Room::new(std::f64::consts::FRAC_PI_2, 0.);
+        let pitch = Room::new(0., std::f64::consts::FRAC_PI_2);
         assert!(
             (upright
                 .nearest_hit(1_000_000_000, [0., 1., 0.], 70.)
@@ -232,6 +233,24 @@ mod tests {
                 .distance_m
                 - 0.8)
                 .abs()
+                < 1e-12
+        );
+    }
+
+    #[test]
+    fn fixed_mount_preserves_per_emission_motion() {
+        // Pitch sensor-forward upward by 0.1 rad; yaw and translation must
+        // still evolve with time even though the mounting rotation is cached.
+        let room = Room::new(0.3, -0.1);
+        let start = room.nearest_hit(1_000_000_000, [1., 0., 0.], 70.).unwrap();
+        let later = room.nearest_hit(6_000_000_000, [1., 0., 0.], 70.).unwrap();
+        assert!((start.distance_m - 10. / 0.1f64.cos()).abs() < 1e-12);
+        assert!((later.distance_m - 10. / (1f64.sin() * 0.1f64.cos())).abs() < 1e-12);
+        assert!((later.incidence_cosine - 1f64.sin() * 0.1f64.cos()).abs() < 1e-12);
+        assert_ne!(start.distance_m, later.distance_m);
+        let translated = room.nearest_hit(2_000_000_000, [1., 0., 0.], 70.).unwrap();
+        assert!(
+            (translated.distance_m - (10. - 1f64.sin()) / (0.2f64.cos() * 0.1f64.cos())).abs()
                 < 1e-12
         );
     }

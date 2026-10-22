@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+### Performance
+
+- Skip disabled range noise and independent dropout work, and evaluate only
+  retained nominal lanes at strides of three or more. Preserve seeded effects,
+  acquisition times and nearest-hit occlusion.
+- Cache the standalone room demo's fixed mounting trigonometry while retaining
+  per-emission sensor motion and caller-owned dynamic scene rotations.
+
 ### Dependencies
 
 - Update Tokio to 1.54.1 to address RUSTSEC-2026-0384.

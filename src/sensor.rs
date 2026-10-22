@@ -167,6 +167,26 @@ impl Sensor {
         if pattern.direction(first).is_none() || pattern.direction(last).is_none() {
             return Err("acquisition exceeds scan profile duration");
         }
+        // Choose the range-noise path once per acquisition so enabled noise
+        // does not pay for an extra conditional at every valid return.
+        if self.effects.range_sigma_m > 0. {
+            self.sample_validated::<true>(scene, pattern, first, count, stride, out);
+        } else {
+            self.sample_validated::<false>(scene, pattern, first, count, stride, out);
+        }
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn sample_validated<const RANGE_NOISE: bool>(
+        &self,
+        scene: &impl Scene,
+        pattern: ScanPattern,
+        first: u64,
+        count: u32,
+        stride: u32,
+        out: &mut RollingFrame,
+    ) {
         out.points.clear();
         let mut nominal_group = None;
         let mut nominal_rays = [[0.; 3]; 4];
@@ -174,14 +194,16 @@ impl Sensor {
             let index = first + u64::from(offset) * u64::from(stride);
             let time_ns = self.epoch_ns + index * POINT_INTERVAL_NS;
             let e = self.effects;
-            let mut d = if pattern == ScanPattern::Nominal {
-                if nominal_group != Some(index / 4) {
-                    nominal_rays = crate::hardware::NominalPattern.group_directions(index);
-                    nominal_group = Some(index / 4);
+            let mut d = match pattern {
+                ScanPattern::Nominal if stride <= 2 => {
+                    if nominal_group != Some(index / 4) {
+                        nominal_rays = crate::hardware::NominalPattern.group_directions(index);
+                        nominal_group = Some(index / 4);
+                    }
+                    nominal_rays[(index % 4) as usize]
                 }
-                nominal_rays[(index % 4) as usize]
-            } else {
-                pattern.direction(index).expect("validated profile window")
+                ScanPattern::Nominal => crate::hardware::NominalPattern.direction(index),
+                _ => pattern.direction(index).expect("validated profile window"),
             };
             if e.angular_sigma_rad > 0. {
                 let a = d[1].atan2(d[0]);
@@ -219,12 +241,13 @@ impl Sensor {
                     1.
                 };
                 if valid
-                    && uniform(e.seed, index, 1) >= e.dropout
+                    && (e.dropout == 0. || uniform(e.seed, index, 1) >= e.dropout)
                     && uniform(e.seed, index, 2) < response
                 {
-                    let range = hit.distance_m
-                        + e.range_bias_m
-                        + e.range_sigma_m * normal(e.seed, index, 3);
+                    let mut range = hit.distance_m + e.range_bias_m;
+                    if RANGE_NOISE {
+                        range += e.range_sigma_m * normal(e.seed, index, 3);
+                    }
                     if range.is_finite()
                         && range > 0.
                         && range >= self.min_range_m
@@ -237,7 +260,6 @@ impl Sensor {
             }
             out.points.push(point);
         }
-        Ok(())
     }
 }
 #[cfg(test)]
@@ -293,31 +315,46 @@ mod tests {
     }
     #[test]
     fn chunk_and_stride_invariant_noise() {
-        let s = Sensor::new(
-            0.1,
-            40.,
-            10,
+        for effects in [
+            Effects::default(),
+            Effects {
+                range_sigma_m: 0.02,
+                ..Default::default()
+            },
+            Effects {
+                dropout: 0.1,
+                ..Default::default()
+            },
             Effects {
                 range_sigma_m: 0.02,
                 angular_sigma_rad: 0.001,
                 dropout: 0.1,
+                diffuse_dropout: true,
                 ..Default::default()
             },
-        )
-        .unwrap();
-        let mut all = RollingFrame::default();
-        s.sample_into(&Surface(10.), 0, 1000, 1, &mut all).unwrap();
-        let mut a = RollingFrame::default();
-        let mut b = RollingFrame::default();
-        s.sample_into(&Surface(10.), 0, 500, 1, &mut a).unwrap();
-        s.sample_into(&Surface(10.), 500, 500, 1, &mut b).unwrap();
-        a.points.append(&mut b.points);
-        assert_eq!(all, a);
-        s.sample_into(&Surface(10.), 0, 334, 3, &mut b).unwrap();
-        assert_eq!(
-            b.points,
-            all.points.iter().step_by(3).copied().collect::<Vec<_>>()
-        );
+        ] {
+            let s = Sensor::new(0.1, 40., 10, effects).unwrap();
+            let mut all = RollingFrame::default();
+            s.sample_into(&Surface(10.), 7, 1000, 1, &mut all).unwrap();
+            let mut a = RollingFrame::default();
+            let mut b = RollingFrame::default();
+            s.sample_into(&Surface(10.), 7, 499, 1, &mut a).unwrap();
+            s.sample_into(&Surface(10.), 506, 501, 1, &mut b).unwrap();
+            a.points.append(&mut b.points);
+            assert_eq!(all, a);
+            for stride in [1, 2, 3, 4, 7, 31] {
+                s.sample_into(&Surface(10.), 7, 1000u32.div_ceil(stride), stride, &mut b)
+                    .unwrap();
+                assert_eq!(
+                    b.points,
+                    all.points
+                        .iter()
+                        .step_by(stride as usize)
+                        .copied()
+                        .collect::<Vec<_>>()
+                );
+            }
+        }
     }
     #[test]
     fn occlusion_and_atomic_validation() {

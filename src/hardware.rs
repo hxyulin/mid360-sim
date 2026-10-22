@@ -97,7 +97,8 @@ impl NominalPattern {
         angles.map(|[a, e]| Self::ray(spin, a, e))
     }
 
-    /// Fill caller-owned directions at `first + i*stride`, sharing four-lane work.
+    /// Fill caller-owned directions at `first + i*stride`. Share four-lane work
+    /// at strides one and two; evaluate only retained lanes for larger strides.
     /// Reject zero stride or index overflow before modifying the output slice.
     /// Empty output is allowed. Results match scalar evaluation bit for bit.
     pub fn fill_directions(
@@ -120,6 +121,10 @@ impl NominalPattern {
         let mut rays = [[0.; 3]; 4];
         for (i, output) in output.iter_mut().enumerate() {
             let index = first + i as u64 * u64::from(stride);
+            if stride > 2 {
+                *output = self.direction(index);
+                continue;
+            }
             if cached != Some(index / 4) {
                 rays = self.group_directions(index);
                 cached = Some(index / 4);
@@ -209,8 +214,8 @@ mod tests {
     #[test]
     fn nominal_batch_matches_scalar_across_clock_wrap_and_chunks() {
         let p = NominalPattern;
-        for first in [0, 7, NOMINAL_CYCLE_GROUPS * 4 - 31, u64::MAX - 100] {
-            for stride in [1, 3, 5] {
+        for first in [0, 1, 2, 7, NOMINAL_CYCLE_GROUPS * 4 - 31, u64::MAX - 1000] {
+            for stride in [1, 2, 3, 4, 5, 7, 31] {
                 let mut rays = [[0.; 3]; 20];
                 p.fill_directions(first, stride, &mut rays).unwrap();
                 for (i, ray) in rays.iter().enumerate() {
