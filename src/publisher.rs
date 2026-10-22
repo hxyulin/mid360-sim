@@ -3,10 +3,12 @@
 //! Safe rclrs dynamic publishers using installed standard/Livox C introspection.
 //! No generated Rust bindings or unsafe code. Publishing may block in the RMW;
 //! call outside a shared simulation worker or provide caller-owned bounded queues.
+//! Each endpoint retains message metadata; each publish creates a fresh owned
+//! message because rclrs consumes it when publishing.
 use crate::{LivoxPacket, RosTime};
 use anyhow::{Result, bail};
 use rclrs::{
-    DynamicMessage, DynamicPublisher, IntoPrimitiveOptions, MessageTypeName, Node,
+    DynamicMessageMetadata, DynamicPublisher, IntoPrimitiveOptions, MessageTypeName, Node,
     SequenceValueMut, SimpleValueMut, ValueMut,
 };
 macro_rules! scalar {
@@ -22,20 +24,21 @@ macro_rules! scalar {
 pub struct LivoxPublisher {
     points: DynamicPublisher,
     clock: DynamicPublisher,
+    points_metadata: DynamicMessageMetadata,
+    clock_metadata: DynamicMessageMetadata,
 }
 impl LivoxPublisher {
     /// Create DDS endpoints. Installed interfaces must contain unmodified
     /// `livox_ros_driver2/msg/CustomMsg` and `rosgraph_msgs/msg/Clock`.
     pub fn new(node: &Node, topic: &str) -> Result<Self> {
+        let points_type = MessageTypeName::try_from("livox_ros_driver2/msg/CustomMsg")?;
+        let clock_type = MessageTypeName::try_from("rosgraph_msgs/msg/Clock")?;
         Ok(Self {
-            points: node.create_dynamic_publisher(
-                MessageTypeName::try_from("livox_ros_driver2/msg/CustomMsg")?,
-                topic.keep_last(5).best_effort(),
-            )?,
-            clock: node.create_dynamic_publisher(
-                MessageTypeName::try_from("rosgraph_msgs/msg/Clock")?,
-                "/clock".keep_last(1).best_effort(),
-            )?,
+            points_metadata: DynamicMessageMetadata::new(points_type.clone())?,
+            clock_metadata: DynamicMessageMetadata::new(clock_type.clone())?,
+            points: node.create_dynamic_publisher(points_type, topic.keep_last(5).best_effort())?,
+            clock: node
+                .create_dynamic_publisher(clock_type, "/clock".keep_last(1).best_effort())?,
         })
     }
     /// Current DDS point-cloud subscriber count, useful for bounded startup waits.
@@ -46,9 +49,7 @@ impl LivoxPublisher {
     /// data remain distorted local sensor points with original per-point offsets.
     /// Reflectivity/tag/lane are explicit simulation policies, not sensor truth.
     pub fn publish(&self, packet: &LivoxPacket) -> Result<()> {
-        let mut msg = DynamicMessage::new(MessageTypeName::try_from(
-            "livox_ros_driver2/msg/CustomMsg",
-        )?)?;
+        let mut msg = self.points_metadata.create()?;
         scalar!(msg, "timebase", Uint64, packet.timebase_ns);
         scalar!(
             msg,
@@ -98,7 +99,7 @@ impl LivoxPublisher {
     /// Publish explicit simulation time. No wall-clock timestamp is substituted.
     pub fn publish_clock(&self, time_ns: u64) -> Result<()> {
         let time = RosTime::from_ns(time_ns).map_err(anyhow::Error::msg)?;
-        let mut msg = DynamicMessage::new(MessageTypeName::try_from("rosgraph_msgs/msg/Clock")?)?;
+        let mut msg = self.clock_metadata.create()?;
         if let Some(ValueMut::Simple(SimpleValueMut::Message(mut clock))) = msg.get_mut("clock") {
             scalar!(clock, "sec", Int32, time.sec);
             scalar!(clock, "nanosec", Uint32, time.nanosec);
@@ -115,6 +116,7 @@ impl LivoxPublisher {
 /// SI inertial publisher with no orientation estimate or privileged world pose.
 pub struct ImuPublisher {
     publisher: DynamicPublisher,
+    metadata: DynamicMessageMetadata,
     frame_id: String,
 }
 impl ImuPublisher {
@@ -138,11 +140,10 @@ impl ImuPublisher {
             !frame_id.is_empty() && !frame_id.contains('\0'),
             "invalid IMU frame ID"
         );
+        let ty = MessageTypeName::try_from("sensor_msgs/msg/Imu")?;
         Ok(Self {
-            publisher: node.create_dynamic_publisher(
-                MessageTypeName::try_from("sensor_msgs/msg/Imu")?,
-                topic.qos(qos),
-            )?,
+            metadata: DynamicMessageMetadata::new(ty.clone())?,
+            publisher: node.create_dynamic_publisher(ty, topic.qos(qos))?,
             frame_id: frame_id.into(),
         })
     }
@@ -156,7 +157,7 @@ impl ImuPublisher {
     pub fn publish(&self, sample: &crate::imu::ImuSample) -> Result<()> {
         sample.validate().map_err(anyhow::Error::msg)?;
         let stamp = RosTime::from_ns(sample.time_ns).map_err(anyhow::Error::msg)?;
-        let mut msg = DynamicMessage::new(MessageTypeName::try_from("sensor_msgs/msg/Imu")?)?;
+        let mut msg = self.metadata.create()?;
         if let Some(ValueMut::Simple(SimpleValueMut::Message(mut header))) = msg.get_mut("header") {
             scalar!(header, "frame_id", String, self.frame_id.as_str().into());
             if let Some(ValueMut::Simple(SimpleValueMut::Message(mut time))) =
@@ -198,6 +199,7 @@ impl ImuPublisher {
 /// Standard PointCloud2 publisher with explicit nanosecond timing fields.
 pub struct PointCloudPublisher {
     publisher: DynamicPublisher,
+    metadata: DynamicMessageMetadata,
 }
 impl PointCloudPublisher {
     /// Create a best-effort volatile cloud endpoint with depth 5.
@@ -210,11 +212,10 @@ impl PointCloudPublisher {
     }
     /// Create a cloud endpoint with caller-selected delivery QoS.
     pub fn new_with_qos(node: &Node, topic: &str, qos: rclrs::QoSProfile) -> Result<Self> {
+        let ty = MessageTypeName::try_from("sensor_msgs/msg/PointCloud2")?;
         Ok(Self {
-            publisher: node.create_dynamic_publisher(
-                MessageTypeName::try_from("sensor_msgs/msg/PointCloud2")?,
-                topic.qos(qos),
-            )?,
+            metadata: DynamicMessageMetadata::new(ty.clone())?,
+            publisher: node.create_dynamic_publisher(ty, topic.qos(qos))?,
         })
     }
     /// Current cloud subscription count for bounded discovery waits.
@@ -234,8 +235,7 @@ impl PointCloudPublisher {
             "invalid cloud frame"
         );
         let data = crate::pointcloud::encode(packet).map_err(anyhow::Error::msg)?;
-        let mut msg =
-            DynamicMessage::new(MessageTypeName::try_from("sensor_msgs/msg/PointCloud2")?)?;
+        let mut msg = self.metadata.create()?;
         if let Some(ValueMut::Simple(SimpleValueMut::Message(mut h))) = msg.get_mut("header") {
             scalar!(
                 h,
@@ -292,6 +292,7 @@ impl PointCloudPublisher {
 pub struct TransformPublisher {
     fixed: DynamicPublisher,
     moving: DynamicPublisher,
+    metadata: DynamicMessageMetadata,
 }
 impl TransformPublisher {
     /// Create reliable `/tf` (depth 100) and transient-local `/tf_static` (depth 1).
@@ -299,6 +300,7 @@ impl TransformPublisher {
     pub fn new(node: &Node) -> Result<Self> {
         let ty = MessageTypeName::try_from("tf2_msgs/msg/TFMessage")?;
         Ok(Self {
+            metadata: DynamicMessageMetadata::new(ty.clone())?,
             fixed: node.create_dynamic_publisher(
                 ty.clone(),
                 "/tf_static".keep_last(1).reliable().transient_local(),
@@ -321,7 +323,7 @@ impl TransformPublisher {
                 );
             }
         }
-        let mut msg = DynamicMessage::new(MessageTypeName::try_from("tf2_msgs/msg/TFMessage")?)?;
+        let mut msg = self.metadata.create()?;
         if let Some(ValueMut::Sequence(SequenceValueMut::MessageSequence(mut transforms))) =
             msg.get_mut("transforms")
         {
