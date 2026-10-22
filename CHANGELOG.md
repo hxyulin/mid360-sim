@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- Add a dependency-free Rust microbenchmark for acquisition effects, capture
+  profiles, caller IMU synthesis, packet conversion and fault-queue scheduling,
+  with a scoped local baseline and prioritized optimization follow-ups.
+
 - Expand Rust API guidance with runnable scene acquisition, packet timing,
   transform, batch direction, capture-bound and PointCloud2 examples; clarify
   validation, coordinate units and reusable acquisition buffer semantics.

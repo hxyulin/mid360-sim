@@ -38,6 +38,11 @@ absolute cross-platform libm variation. This is a numeric export check, not an
 angular fit/noise tolerance. Do not commit captures, CAD,
 build trees or private decoders; `local-assets/` is disposable ignored scratch.
 
+For isolated acquisition, effect, encoding and packet-queue timings, run
+`cargo run --release --locked --example core_bench`. See the
+[Rust performance baseline and follow-ups](rust-performance.md) for workload
+boundaries and the recorded local measurements.
+
 ## Optional runtime checks
 
 ```sh

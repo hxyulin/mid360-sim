@@ -1,0 +1,152 @@
+{
+  "date": "2026-10-23",
+  "source_revision": "72e734d6fca09a801199751d772cc79cbebceaf6",
+  "host": "Apple M5 Max, macOS arm64",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "command": "cargo run --release --locked --example core_bench",
+  "protocol": "Three warmups, 15 timed repetitions, fixed case order; no CPU pinning; no ROS, native physics or GPU. Source revision identifies library/fixture; benchmark added afterward, checksummed below.",
+  "sha256": {
+    "examples/core_bench.rs": "e75a1393861c10e9c41ddcb7013452c8a60f2760a44ab3adf2f3554db761004a",
+    "examples/synchronized/fixture.rs": "e8539e6adfcc849f5d206fe09287139994ddf898ddc05f394c8736ce5552b71e",
+    "src/sensor.rs": "9381f6c26e2a036e9b530d62000fdfb8748754ee1d3b534576619a0640961db3",
+    "src/hardware.rs": "6d71087eafd440431efc3c46a69c55098efa601fabbb6700d31289104fdf90e5",
+    "src/effects.rs": "55c998a5cbe880150a93bdc42b9bbce47ea47e8f12f8e17db657c567d8a44cb9",
+    "src/transport.rs": "d69ca658ec3d76c437b9b4375ccd10e2334525f8a3e7ed3919f50acbd8cb8ed2",
+    "src/lib.rs": "5809d88453dbbbbecac41ce0ea05d91252602f651d7c09ee4a27874bcf2ffa36",
+    "src/pointcloud.rs": "686f61c3995bb5cdf0c3b5349266ed06fe9aa0685eeab1dae7a5c466f85f5fc3",
+    "src/pattern.rs": "8171c4279ad777a41946f1e241ba57cc4081eb5796e35ef4a7b99bfb00f67b71",
+    "src/coefficients.rs": "7fdae299ce1e43054ac9a66a3d33aa73a9314bae521bf0e45f60f41cbfba15eb",
+    "src/hardware_data.rs": "422b3d3b56a394b74ea2f6a765cf146068058bd7d0343fce1479591536f196f9",
+    "src/nominal_data.rs": "279a1ce8b4d5b364196a9cc1532f4c03e421381c4f92ec422a5c00b63e851cf3"
+  },
+  "results": [
+    {
+      "case": "sphere/ideal",
+      "units": 200000,
+      "median_ms": 6.106417,
+      "min_ms": 6.099417,
+      "max_ms": 7.018166,
+      "trials": 15
+    },
+    {
+      "case": "sphere/range",
+      "units": 200000,
+      "median_ms": 10.405375,
+      "min_ms": 10.309625,
+      "max_ms": 11.004166,
+      "trials": 15
+    },
+    {
+      "case": "sphere/angular",
+      "units": 200000,
+      "median_ms": 15.033833,
+      "min_ms": 14.899209,
+      "max_ms": 16.557583,
+      "trials": 15
+    },
+    {
+      "case": "sphere/all-effects",
+      "units": 200000,
+      "median_ms": 18.443292,
+      "min_ms": 18.415541,
+      "max_ms": 18.764625,
+      "trials": 15
+    },
+    {
+      "case": "articulated/ideal",
+      "units": 200000,
+      "median_ms": 32.4415,
+      "min_ms": 32.1535,
+      "max_ms": 33.355125,
+      "trials": 15
+    },
+    {
+      "case": "articulated/all-effects",
+      "units": 200000,
+      "median_ms": 44.713625,
+      "min_ms": 44.648791,
+      "max_ms": 46.32325,
+      "trials": 15
+    },
+    {
+      "case": "articulated/all-effects/stride3",
+      "units": 66670,
+      "median_ms": 17.581291,
+      "min_ms": 17.535875,
+      "max_ms": 18.0685,
+      "trials": 15
+    },
+    {
+      "case": "sphere/hardware-mean",
+      "units": 200000,
+      "median_ms": 20.173291,
+      "min_ms": 19.758334,
+      "max_ms": 20.998709,
+      "trials": 15
+    },
+    {
+      "case": "sphere/hardware-capture",
+      "units": 200000,
+      "median_ms": 23.682625,
+      "min_ms": 23.35725,
+      "max_ms": 24.045291,
+      "trials": 15
+    },
+    {
+      "case": "imu/articulated-fixture",
+      "units": 200000,
+      "median_ms": 160.359583,
+      "min_ms": 156.308292,
+      "max_ms": 197.375667,
+      "trials": 15
+    },
+    {
+      "case": "livox/allocate",
+      "units": 200000,
+      "median_ms": 0.420375,
+      "min_ms": 0.417708,
+      "max_ms": 0.444125,
+      "trials": 15
+    },
+    {
+      "case": "pointcloud/allocate",
+      "units": 200000,
+      "median_ms": 0.357625,
+      "min_ms": 0.356791,
+      "max_ms": 0.361125,
+      "trials": 15
+    },
+    {
+      "case": "faults/decision",
+      "units": 100000,
+      "median_ms": 0.34175,
+      "min_ms": 0.326791,
+      "max_ms": 0.426292,
+      "trials": 15
+    },
+    {
+      "case": "faults/queue/8",
+      "units": 100000,
+      "median_ms": 5.606416,
+      "min_ms": 5.291541,
+      "max_ms": 5.828792,
+      "trials": 15
+    },
+    {
+      "case": "faults/queue/256",
+      "units": 100000,
+      "median_ms": 17.938042,
+      "min_ms": 15.291333,
+      "max_ms": 24.392167,
+      "trials": 15
+    },
+    {
+      "case": "faults/queue/4096",
+      "units": 100000,
+      "median_ms": 22.189041,
+      "min_ms": 21.376792,
+      "max_ms": 23.648667,
+      "trials": 15
+    }
+  ]
+}
