@@ -79,21 +79,64 @@ impl Mul for Jet {
         }
     }
 }
-type Matrix = [[Jet; 3]; 3];
-fn product(a: Matrix, b: Matrix) -> Matrix {
+// Geometry needs only values; IMU synthesis instantiates these expressions with jets.
+trait Scalar:
+    Copy
+    + Default
+    + From<f64>
+    + From<i32>
+    + Add<Output = Self>
+    + Mul<Output = Self>
+    + Neg<Output = Self>
+{
+    fn value(self) -> f64;
+    fn sin(self) -> Self;
+    fn cos(self) -> Self;
+}
+// Preserve the Jet path's paired trig results even when geometry consumes only
+// sine or cosine. Inlining permits LLVM to replace the pair with standalone
+// libm calls, which can differ by an ULP on macOS.
+#[inline(never)]
+fn value_sin_cos(value: f64) -> (f64, f64) {
+    value.sin_cos()
+}
+impl Scalar for f64 {
+    fn value(self) -> f64 {
+        self
+    }
+    fn sin(self) -> Self {
+        value_sin_cos(self).0
+    }
+    fn cos(self) -> Self {
+        value_sin_cos(self).1
+    }
+}
+impl Scalar for Jet {
+    fn value(self) -> f64 {
+        self.v
+    }
+    fn sin(self) -> Self {
+        self.sin()
+    }
+    fn cos(self) -> Self {
+        self.cos()
+    }
+}
+type Matrix<T> = [[T; 3]; 3];
+fn product<T: Scalar>(a: Matrix<T>, b: Matrix<T>) -> Matrix<T> {
     std::array::from_fn(|i| {
-        std::array::from_fn(|j| (0..3).fold(Jet::default(), |sum, k| sum + a[i][k] * b[k][j]))
+        std::array::from_fn(|j| (0..3).fold(T::default(), |sum, k| sum + a[i][k] * b[k][j]))
     })
 }
-fn apply(a: Matrix, p: [Jet; 3]) -> [Jet; 3] {
-    std::array::from_fn(|i| (0..3).fold(Jet::default(), |sum, j| sum + a[i][j] * p[j]))
+fn apply<T: Scalar>(a: Matrix<T>, p: [T; 3]) -> [T; 3] {
+    std::array::from_fn(|i| (0..3).fold(T::default(), |sum, j| sum + a[i][j] * p[j]))
 }
-fn rz(a: Jet) -> Matrix {
+fn rz<T: Scalar>(a: T) -> Matrix<T> {
     let (s, c) = (a.sin(), a.cos());
     let (z, o) = (0.into(), 1.into());
     [[c, -s, z], [s, c, z], [z, z, o]]
 }
-fn ry(a: Jet) -> Matrix {
+fn ry<T: Scalar>(a: T) -> Matrix<T> {
     let (s, c) = (a.sin(), a.cos());
     let (z, o) = (0.into(), 1.into());
     [[c, z, s], [z, o, z], [-s, z, c]]
@@ -125,28 +168,19 @@ impl Motion {
     }
 }
 #[derive(Clone, Copy)]
-struct Pose {
-    p: [Jet; 3],
-    r: Matrix,
+struct Pose<T> {
+    p: [T; 3],
+    r: Matrix<T>,
 }
-fn parts(t: f64, motion: Motion) -> (Matrix, Matrix, [Jet; 3]) {
-    let t = Jet {
-        v: t,
-        d: 1.,
-        dd: 0.,
-    };
+fn parts<T: Scalar>(t: T, motion: Motion) -> (Matrix<T>, Matrix<T>, [T; 3]) {
     // Quiet initialization followed by a C2 ramp into articulated motion.
     let t = if matches!(motion, Motion::Lio) {
-        let u = t.v - 3.;
+        let u = t.value() - 3.;
         if u <= 0. {
-            Jet::from(0.)
+            T::from(0.)
         } else if u < 1. {
             // Integral of 3u²-2u³: velocity and acceleration start at zero.
-            let u = Jet {
-                v: u,
-                d: 1.,
-                dd: 0.,
-            };
+            let u = t + (-3.).into();
             u * u * u + -(u * u * u * u * 0.5.into())
         } else {
             t + (-3.5).into()
@@ -173,12 +207,12 @@ fn parts(t: f64, motion: Motion) -> (Matrix, Matrix, [Jet; 3]) {
             [
                 (t * 0.6.into()).sin() * 0.5.into(),
                 (t * 0.4.into()).cos() * 0.4.into(),
-                Jet::from(1.2) + (t * 0.3.into()).sin() * 0.1.into(),
+                T::from(1.2) + (t * 0.3.into()).sin() * 0.1.into(),
             ],
         ),
     }
 }
-fn lidar_pose(t: f64, motion: Motion) -> Pose {
+fn lidar_pose<T: Scalar>(t: T, motion: Motion) -> Pose<T> {
     let (base, head, p) = parts(t, motion);
     let offset = apply(base, [0.25.into(), 0.into(), 0.2.into()]);
     Pose {
@@ -187,7 +221,14 @@ fn lidar_pose(t: f64, motion: Motion) -> Pose {
     }
 }
 fn instantaneous_imu(t: f64, motion: Motion) -> ([f64; 3], [f64; 3]) {
-    let lidar = lidar_pose(t, motion);
+    let lidar = lidar_pose(
+        Jet {
+            v: t,
+            d: 1.,
+            dd: 0.,
+        },
+        motion,
+    );
     // Explicit example extrinsic: 4/-2/1.5 cm in LiDAR FLU, pitch +0.1 rad.
     let offset = apply(lidar.r, [0.04.into(), (-0.02).into(), 0.015.into()]);
     let p: [Jet; 3] = std::array::from_fn(|i| lidar.p[i] + offset[i]);
@@ -225,10 +266,17 @@ pub fn imu(time_ns: u64, motion: Motion) -> ImuSample {
         specific_force_m_s2: force,
     }
 }
-pub fn world_point(time_ns: u64, point: [f64; 3], motion: Motion) -> [f64; 3] {
+// Cache this closure only for intentionally frozen packet-start diagnostics.
+// Acquisition and motion-correct scoring still evaluate a pose per emission.
+pub(super) fn world_from_sensor(time_ns: u64, motion: Motion) -> impl Fn([f64; 3]) -> [f64; 3] {
     let pose = lidar_pose((time_ns - EPOCH_NS) as f64 * 1e-9, motion);
-    let q = apply(pose.r, point.map(Jet::from));
-    std::array::from_fn(|i| pose.p[i].v + q[i].v)
+    move |point| {
+        let q = apply(pose.r, point);
+        std::array::from_fn(|i| pose.p[i] + q[i])
+    }
+}
+pub fn world_point(time_ns: u64, point: [f64; 3], motion: Motion) -> [f64; 3] {
+    world_from_sensor(time_ns, motion)(point)
 }
 pub fn wall_error(p: [f64; 3]) -> f64 {
     [p[0].abs() - 10., p[1].abs() - 10., p[2], p[2] - 4.]
@@ -245,18 +293,18 @@ impl Scene for Room {
         max_range_m: f64,
     ) -> Option<SurfaceHit> {
         let pose = lidar_pose((time_ns - EPOCH_NS) as f64 * 1e-9, self.0);
-        let d = apply(pose.r, direction.map(Jet::from));
+        let d = apply(pose.r, direction);
         let mut nearest = max_range_m;
         let mut incidence = 0.;
         for (axis, component) in d.iter().enumerate() {
-            if component.v.abs() < 1e-12 {
+            if component.abs() < 1e-12 {
                 continue;
             }
             for plane in if axis == 2 { [0., 4.] } else { [-10., 10.] } {
-                let range = (plane - pose.p[axis].v) / d[axis].v;
+                let range = (plane - pose.p[axis]) / d[axis];
                 if range >= 0. && range < nearest {
                     nearest = range;
-                    incidence = d[axis].v.abs();
+                    incidence = d[axis].abs();
                 }
             }
         }
@@ -296,9 +344,9 @@ pub fn transforms(
         },
     )
 }
-fn matrix_transform(p: [f64; 3], r: Matrix) -> mid360_sim::frames::Transform {
+fn matrix_transform(p: [f64; 3], r: Matrix<f64>) -> mid360_sim::frames::Transform {
     // Stable matrix-to-quaternion conversion, including rotations near pi.
-    let m = r.map(|row| row.map(|v| v.v));
+    let m = r;
     let candidates = [
         1. + m[0][0] - m[1][1] - m[2][2],
         1. - m[0][0] + m[1][1] - m[2][2],
@@ -343,10 +391,10 @@ fn matrix_transform(p: [f64; 3], r: Matrix) -> mid360_sim::frames::Transform {
 }
 pub fn imu_truth(time_ns: u64, motion: Motion) -> mid360_sim::frames::Transform {
     let pose = lidar_pose((time_ns - EPOCH_NS) as f64 * 1e-9, motion);
-    let offset = apply(pose.r, [0.04.into(), (-0.02).into(), 0.015.into()]);
+    let offset = apply(pose.r, [0.04, -0.02, 0.015]);
     matrix_transform(
-        std::array::from_fn(|i| pose.p[i].v + offset[i].v),
-        product(pose.r, ry(0.1.into())),
+        std::array::from_fn(|i| pose.p[i] + offset[i]),
+        product(pose.r, ry(0.1)),
     )
 }
 #[cfg(test)]
@@ -389,7 +437,7 @@ mod frame_tests {
             let t = (time_ns - EPOCH_NS) as f64 * 1e-9;
             let (base, _, p) = parts(t, Motion::Articulated);
             let (head, imu) = transforms(time_ns, Motion::Articulated);
-            let body = matrix_transform(p.map(|v| v.v), base);
+            let body = matrix_transform(p, base);
             for q in [[0., 0., 0.], [1., 2., 3.]] {
                 let chain = body.point(head.transform.point(q));
                 let expected = world_point(time_ns, q, Motion::Articulated);
@@ -417,5 +465,259 @@ mod frame_tests {
             transforms(EPOCH_NS, Motion::Articulated).1,
             transforms(EPOCH_NS + 300_000_000, Motion::Articulated).1
         );
+    }
+}
+
+// Frozen pre-optimization Jet trajectory and geometry: value-bit regression oracle.
+#[cfg(test)]
+#[allow(dead_code)]
+pub(super) mod oracle {
+    use super::{EPOCH_NS, Jet, Motion};
+    use mid360_sim::sensor::{Scene, SurfaceHit};
+    type Matrix = [[Jet; 3]; 3];
+    fn product(a: Matrix, b: Matrix) -> Matrix {
+        std::array::from_fn(|i| {
+            std::array::from_fn(|j| (0..3).fold(Jet::default(), |sum, k| sum + a[i][k] * b[k][j]))
+        })
+    }
+    fn apply(a: Matrix, p: [Jet; 3]) -> [Jet; 3] {
+        std::array::from_fn(|i| (0..3).fold(Jet::default(), |sum, j| sum + a[i][j] * p[j]))
+    }
+    fn rz(a: Jet) -> Matrix {
+        let (s, c) = (a.sin(), a.cos());
+        let (z, o) = (0.into(), 1.into());
+        [[c, -s, z], [s, c, z], [z, z, o]]
+    }
+    fn ry(a: Jet) -> Matrix {
+        let (s, c) = (a.sin(), a.cos());
+        let (z, o) = (0.into(), 1.into());
+        [[c, z, s], [z, o, z], [-s, z, c]]
+    }
+    #[derive(Clone, Copy)]
+    struct Pose {
+        p: [Jet; 3],
+        r: Matrix,
+    }
+    fn parts(t: f64, motion: Motion) -> (Matrix, Matrix, [Jet; 3]) {
+        let t = Jet {
+            v: t,
+            d: 1.,
+            dd: 0.,
+        };
+        // Quiet initialization followed by a C2 ramp into articulated motion.
+        let t = if matches!(motion, Motion::Lio) {
+            let u = t.v - 3.;
+            if u <= 0. {
+                Jet::from(0.)
+            } else if u < 1. {
+                // Integral of 3u²-2u³: velocity and acceleration start at zero.
+                let u = Jet {
+                    v: u,
+                    d: 1.,
+                    dd: 0.,
+                };
+                u * u * u + -(u * u * u * u * 0.5.into())
+            } else {
+                t + (-3.5).into()
+            }
+        } else {
+            t
+        };
+        match motion {
+            Motion::Stationary => (rz(0.into()), ry(0.into()), [0.into(), 0.into(), 1.2.into()]),
+            Motion::Yaw => (
+                rz(t * 0.8.into()),
+                ry(0.into()),
+                [0.into(), 0.into(), 1.2.into()],
+            ),
+            Motion::Articulated | Motion::Lio => (
+                product(
+                    rz(t * 0.6.into() + (t * 1.3.into()).sin() * 0.2.into()),
+                    ry((t * 0.7.into()).sin() * 0.15.into()),
+                ),
+                product(
+                    rz((t * 0.8.into()).sin() * (-0.2).into()),
+                    ry((t * 0.5.into()).cos() * 0.12.into()),
+                ),
+                [
+                    (t * 0.6.into()).sin() * 0.5.into(),
+                    (t * 0.4.into()).cos() * 0.4.into(),
+                    Jet::from(1.2) + (t * 0.3.into()).sin() * 0.1.into(),
+                ],
+            ),
+        }
+    }
+    fn lidar_pose(t: f64, motion: Motion) -> Pose {
+        let (base, head, p) = parts(t, motion);
+        let offset = apply(base, [0.25.into(), 0.into(), 0.2.into()]);
+        Pose {
+            p: std::array::from_fn(|i| p[i] + offset[i]),
+            r: product(base, head),
+        }
+    }
+    pub fn world_point(time_ns: u64, point: [f64; 3], motion: Motion) -> [f64; 3] {
+        let pose = lidar_pose((time_ns - EPOCH_NS) as f64 * 1e-9, motion);
+        let q = apply(pose.r, point.map(Jet::from));
+        std::array::from_fn(|i| pose.p[i].v + q[i].v)
+    }
+    pub fn wall_error(p: [f64; 3]) -> f64 {
+        [p[0].abs() - 10., p[1].abs() - 10., p[2], p[2] - 4.]
+            .iter()
+            .map(|v| v.abs())
+            .fold(f64::INFINITY, f64::min)
+    }
+    pub struct Room(pub Motion);
+    impl Scene for Room {
+        fn nearest_hit(
+            &self,
+            time_ns: u64,
+            direction: [f64; 3],
+            max_range_m: f64,
+        ) -> Option<SurfaceHit> {
+            let pose = lidar_pose((time_ns - EPOCH_NS) as f64 * 1e-9, self.0);
+            let d = apply(pose.r, direction.map(Jet::from));
+            let mut nearest = max_range_m;
+            let mut incidence = 0.;
+            for (axis, component) in d.iter().enumerate() {
+                if component.v.abs() < 1e-12 {
+                    continue;
+                }
+                for plane in if axis == 2 { [0., 4.] } else { [-10., 10.] } {
+                    let range = (plane - pose.p[axis].v) / d[axis].v;
+                    if range >= 0. && range < nearest {
+                        nearest = range;
+                        incidence = d[axis].v.abs();
+                    }
+                }
+            }
+            (incidence > 0.).then_some(SurfaceHit {
+                distance_m: nearest,
+                incidence_cosine: incidence,
+                reflectance: 0.8,
+            })
+        }
+    }
+    #[test]
+    fn scalar_poses_and_jet_derivatives_match_original_bits() {
+        // Include adjacent floating-point seconds and nanosecond timestamps at
+        // both LIO ramp boundaries, plus long-running articulated motion.
+        let mut times = vec![
+            0., 0.000_005, 0.3, 1.7, 3., 4., 60., 999.995, 4.00021, 4.031805,
+        ];
+        for boundary in [3.0_f64, 4.0] {
+            times.extend([
+                f64::from_bits(boundary.to_bits() - 1),
+                f64::from_bits(boundary.to_bits() + 1),
+                boundary - 1e-9,
+                boundary + 1e-9,
+            ]);
+        }
+        for motion in [
+            Motion::Stationary,
+            Motion::Yaw,
+            Motion::Articulated,
+            Motion::Lio,
+        ] {
+            for &t in &times {
+                let old = lidar_pose(t, motion);
+                let scalar = super::lidar_pose(t, motion);
+                let jet = super::lidar_pose(
+                    Jet {
+                        v: t,
+                        d: 1.,
+                        dd: 0.,
+                    },
+                    motion,
+                );
+                for ((old, scalar), jet) in old
+                    .p
+                    .into_iter()
+                    .chain(old.r.into_iter().flatten())
+                    .zip(scalar.p.into_iter().chain(scalar.r.into_iter().flatten()))
+                    .zip(jet.p.into_iter().chain(jet.r.into_iter().flatten()))
+                {
+                    assert_eq!(old.v.to_bits(), scalar.to_bits(), "{motion:?} at {t}");
+                    assert_eq!(old.v.to_bits(), jet.v.to_bits());
+                    assert_eq!(old.d.to_bits(), jet.d.to_bits());
+                    assert_eq!(old.dd.to_bits(), jet.dd.to_bits());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn rolling_returns_and_world_points_match_original_bits_at_ramps() {
+        use mid360_sim::sensor::{Effects, RollingFrame, Sensor};
+        for motion in [
+            Motion::Stationary,
+            Motion::Yaw,
+            Motion::Articulated,
+            Motion::Lio,
+        ] {
+            for first in [0, 59_999, 599_997, 799_997, 1_234_567] {
+                for stride in [1, 3, 7] {
+                    let sensor = Sensor::new(
+                        0.1,
+                        40.,
+                        EPOCH_NS,
+                        Effects {
+                            seed: 0x987654321,
+                            range_sigma_m: 0.02,
+                            angular_sigma_rad: 0.001,
+                            dropout: 0.03,
+                            diffuse_dropout: true,
+                            ..Default::default()
+                        },
+                    )
+                    .unwrap();
+                    let mut old = RollingFrame::default();
+                    let mut new = RollingFrame::default();
+                    sensor
+                        .sample_into(&Room(motion), first, 17, stride, &mut old)
+                        .unwrap();
+                    sensor
+                        .sample_into(&super::Room(motion), first, 17, stride, &mut new)
+                        .unwrap();
+                    for (a, b) in old.points.iter().zip(&new.points) {
+                        assert_eq!(a.sample_index, b.sample_index);
+                        assert_eq!(a.time_ns, b.time_ns);
+                        assert_eq!(a.range_m.map(f64::to_bits), b.range_m.map(f64::to_bits));
+                        assert_eq!(
+                            a.point_sensor_m.map(|p| p.map(f64::to_bits)),
+                            b.point_sensor_m.map(|p| p.map(f64::to_bits))
+                        );
+                        if let Some(p) = a.point_sensor_m {
+                            assert_eq!(
+                                world_point(a.time_ns, p, motion).map(f64::to_bits),
+                                super::world_point(b.time_ns, p, motion).map(f64::to_bits),
+                                "motion={motion:?} time={} first={first} stride={stride}",
+                                b.time_ns
+                            );
+                        }
+                    }
+                }
+            }
+            // Axis-parallel, inside-origin and bounded-range queries exercise
+            // the original nearest-plane decisions independently of scan rays.
+            for time_ns in [EPOCH_NS, EPOCH_NS + 3_000_000_000, EPOCH_NS + 4_000_000_001] {
+                for direction in [[0., 0., 1.], [1., 0., 0.], [0., -1., 0.]] {
+                    for max in [0.05, 1., 40.] {
+                        let bits = |hit: Option<SurfaceHit>| {
+                            hit.map(|h| {
+                                [
+                                    h.distance_m.to_bits(),
+                                    h.incidence_cosine.to_bits(),
+                                    h.reflectance.to_bits(),
+                                ]
+                            })
+                        };
+                        assert_eq!(
+                            bits(Room(motion).nearest_hit(time_ns, direction, max)),
+                            bits(super::Room(motion).nearest_hit(time_ns, direction, max))
+                        );
+                    }
+                }
+            }
+        }
     }
 }

@@ -113,6 +113,9 @@ fn acquire(
         ..Default::default()
     };
     let mut pending = RollingFrame::default();
+    // At most one bounded packet of retained emissions, independent of chunk size.
+    pending.points.reserve(20_000_u32.div_ceil(stride) as usize);
+    let mut inertial = Vec::with_capacity((PACKET_NS / IMU_PERIOD_NS) as usize);
     let mut chunk = RollingFrame::default();
     let mut boundary = PACKET_NS;
     let mut step = 0;
@@ -135,15 +138,18 @@ fn acquire(
             }
             if end == boundary {
                 let packet_start = EPOCH_NS + boundary - PACKET_NS;
-                let inertial: Vec<_> = (1..=PACKET_NS / IMU_PERIOD_NS)
-                    .map(|i| fixture::imu(packet_start + i * IMU_PERIOD_NS, motion))
-                    .collect();
+                inertial.clear();
+                inertial.extend(
+                    (1..=PACKET_NS / IMU_PERIOD_NS)
+                        .map(|i| fixture::imu(packet_start + i * IMU_PERIOD_NS, motion)),
+                );
                 for sample in &inertial {
                     let (moving, fixed) = fixture::transforms(sample.time_ns, motion);
                     moving.validate()?;
                     fixed.validate()?;
                     sample.validate()?;
                 }
+                let frozen_world_point = fixture::world_from_sensor(packet_start, motion);
                 for p in &pending.points {
                     point_hash(&mut metrics.hash, p);
                     if p.sample_index % 3 == 0 {
@@ -155,8 +161,7 @@ fn acquire(
                             fixture::wall_error(fixture::world_point(p.time_ns, xyz, motion))
                                 .powi(2);
                         metrics.squared_frozen_error +=
-                            fixture::wall_error(fixture::world_point(packet_start, xyz, motion))
-                                .powi(2);
+                            fixture::wall_error(frozen_world_point(xyz)).powi(2);
                     }
                 }
                 metrics.emissions += pending.points.len() as u64;
@@ -464,5 +469,148 @@ mod tests {
         .unwrap();
         assert_eq!(metrics.emissions, 13_334);
         assert_eq!(metrics.imu, 40);
+    }
+    fn assert_metric_bits(a: &Metrics, b: &Metrics) {
+        assert_eq!(
+            (
+                a.packets,
+                a.emissions,
+                a.returns,
+                a.imu,
+                a.hash,
+                a.retained_hash
+            ),
+            (
+                b.packets,
+                b.emissions,
+                b.returns,
+                b.imu,
+                b.hash,
+                b.retained_hash
+            )
+        );
+        assert_eq!(
+            a.squared_wall_error.to_bits(),
+            b.squared_wall_error.to_bits()
+        );
+        assert_eq!(
+            a.squared_frozen_error.to_bits(),
+            b.squared_frozen_error.to_bits()
+        );
+    }
+
+    fn acquire_against_jet_oracle(
+        motion: Motion,
+        frames: u64,
+        stride: u32,
+        chunk_ns: u64,
+        effects: Effects,
+    ) -> Metrics {
+        let sensor = Sensor::new(0.1, 40., EPOCH_NS, effects).unwrap();
+        let mut reference = Metrics {
+            hash: 0xcbf29ce484222325,
+            retained_hash: 0xcbf29ce484222325,
+            ..Default::default()
+        };
+        let candidate = acquire(
+            motion,
+            frames,
+            stride,
+            chunk_ns,
+            effects,
+            |scan, imu, end| {
+                let mut old = RollingFrame::default();
+                sensor.sample_into(
+                    &fixture::oracle::Room(motion),
+                    scan.points[0].sample_index,
+                    scan.points.len() as u32,
+                    stride,
+                    &mut old,
+                )?;
+                assert_eq!(scan.points.len(), old.points.len());
+                for (a, b) in scan.points.iter().zip(&old.points) {
+                    assert_eq!(a.sample_index, b.sample_index);
+                    assert_eq!(a.time_ns, b.time_ns);
+                    assert_eq!(
+                        a.range_m.map(f64::to_bits),
+                        b.range_m.map(f64::to_bits),
+                        "motion={motion:?} time={} index={}",
+                        a.time_ns,
+                        a.sample_index
+                    );
+                    assert_eq!(
+                        a.point_sensor_m.map(|p| p.map(f64::to_bits)),
+                        b.point_sensor_m.map(|p| p.map(f64::to_bits))
+                    );
+                    point_hash(&mut reference.hash, b);
+                    if b.sample_index % 3 == 0 {
+                        point_hash(&mut reference.retained_hash, b);
+                    }
+                    if let Some(xyz) = b.point_sensor_m {
+                        reference.returns += 1;
+                        reference.squared_wall_error += fixture::oracle::wall_error(
+                            fixture::oracle::world_point(b.time_ns, xyz, motion),
+                        )
+                        .powi(2);
+                        // Original scoring recalculated this Jet pose for every hit.
+                        reference.squared_frozen_error += fixture::oracle::wall_error(
+                            fixture::oracle::world_point(end - PACKET_NS, xyz, motion),
+                        )
+                        .powi(2);
+                    }
+                }
+                reference.packets += 1;
+                reference.emissions += old.points.len() as u64;
+                reference.imu += imu.len() as u64;
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_metric_bits(&candidate, &reference);
+        candidate
+    }
+
+    #[test]
+    fn output_hashes_and_scoring_bits_match_jet_oracle_across_chunks_and_strides() {
+        for motion in [
+            Motion::Stationary,
+            Motion::Yaw,
+            Motion::Articulated,
+            Motion::Lio,
+        ] {
+            for effects in [
+                Effects::default(),
+                Effects {
+                    seed: 0x123456789,
+                    range_sigma_m: 0.02,
+                    angular_sigma_rad: 0.001,
+                    dropout: 0.03,
+                    diffuse_dropout: true,
+                    ..Default::default()
+                },
+            ] {
+                let full = acquire_against_jet_oracle(motion, 1, 1, PACKET_NS, effects);
+                let fragmented = acquire_against_jet_oracle(motion, 1, 1, 7_812_500, effects);
+                assert_metric_bits(&full, &fragmented);
+                let sparse = acquire_against_jet_oracle(motion, 1, 3, PACKET_NS, effects);
+                let sparse_fragmented =
+                    acquire_against_jet_oracle(motion, 1, 3, 1_000_003, effects);
+                assert_metric_bits(&sparse, &sparse_fragmented);
+                assert_eq!(full.retained_hash, sparse.hash);
+            }
+        }
+    }
+    #[test]
+    fn lio_ramp_packet_scoring_matches_original_bits() {
+        // Cross both 3 s and 4 s boundaries without a dense long-running scan.
+        // Global stride alignment varies packet sizes and first source indices.
+        let effects = Effects {
+            range_sigma_m: 0.02,
+            angular_sigma_rad: 0.001,
+            ..Default::default()
+        };
+        let full = acquire_against_jet_oracle(Motion::Lio, 41, 97, PACKET_NS, effects);
+        let fragmented = acquire_against_jet_oracle(Motion::Lio, 41, 97, 7_812_500, effects);
+        assert_metric_bits(&full, &fragmented);
     }
 }
