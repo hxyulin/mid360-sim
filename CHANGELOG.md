@@ -72,6 +72,8 @@
 
 - Refresh the 0.1.0 candidate notes and release preparation commands; run the
   packet fault example and calibration workflow tests in CI and release checks.
+- Restrict Rust package contents to source/example formats so ignored Python
+  bytecode cannot dirty packaging or enter distributed crates after tests.
 
 - Consolidate capabilities and validation gaps in one status guide, shorten the
   navigation guide by moving historical results into its evidence report, and

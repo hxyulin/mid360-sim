@@ -105,6 +105,7 @@ with tarfile.open(root / f"{prefix}.crate", "r:gz") as z:
     }
     for name in names:
         relative = name.removeprefix(prefix + "/")
+        assert "__pycache__" not in Path(relative).parts and not relative.endswith(".pyc"), name
         assert relative in allowed or relative.startswith(("src/", "examples/")), name
     assert f"{prefix}/src/nominal_data.rs" in names
     assert f"{prefix}/NOTICE.md" in names

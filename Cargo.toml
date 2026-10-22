@@ -10,7 +10,7 @@ repository = "https://github.com/hxyulin/mid360-sim"
 publish = false
 documentation = "https://hxyulin.github.io/mid360-sim/"
 readme = "README.md"
-include = ["/src/**", "/examples/**", "/Cargo.toml", "/Cargo.lock", "/README.md", "/LICENSE-MIT", "/LICENSE-APACHE", "/NOTICE.md"]
+include = ["/src/**/*.rs", "/examples/**/*.rs", "/examples/**/*.py", "/examples/**/*.md", "/examples/**/requirements.txt", "/Cargo.toml", "/Cargo.lock", "/README.md", "/LICENSE-MIT", "/LICENSE-APACHE", "/NOTICE.md"]
 
 [features]
 default = []
