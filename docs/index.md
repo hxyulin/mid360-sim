@@ -1,5 +1,12 @@
 <!-- SPDX-License-Identifier: MIT OR Apache-2.0 -->
 <!-- Copyright (c) 2026 hxyulin <hxyulin@proton.me> -->
+## See the scan and results
+
+![Nominal scan coverage after 100 ms and one second.](/figures/scan-pattern.webp)
+
+[Explore the figures and measured results](guide/results.md): motion replay,
+GPU runtime and ROS delivery, with the conditions beside each comparison.
+
 ## Start with your environment
 
 | Environment | First step | Tested runtime |

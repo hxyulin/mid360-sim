@@ -31,6 +31,10 @@ an NVIDIA MID-360 preset or radar**. Each native direction is evaluated against
 its own corresponding reference intersection. Different distributions make
 these policy comparisons, not identical-ray microbenchmarks.
 
+![Original static-room full-loop and marginal sensor runtimes; measurement boundaries differ.](/figures/runtime.svg)
+
+[Figure data and context](guide/results.md).
+
 ## Cross-backend baseline results
 
 These are the original matched-room measurements, before the allocation-focused

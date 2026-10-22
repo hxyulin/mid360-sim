@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "source_revision": "e45207c15417c2011cef8b5075f562b5bd0dfa38",
+  "pattern": {
+    "source": "integrations/python/mid360_sim/nominal.json",
+    "emissions_per_second": 200000,
+    "windows_s": [0.1, 1.0],
+    "scope": "Generated nominal directions, all emissions from index zero; no scene, hardware capture, noise or material response."
+  },
+  "motion": {
+    "source": "docs/performance-tradeoffs.md",
+    "labels": ["MuJoCo · held poses", "MuJoCo · rolling poses", "Isaac / Warp · bulk history"],
+    "rms_mm": [5.666, 0.294, 0.251],
+    "scope": "Original baseline: 400,000 emissions over a two-second high-motion MoCap segment in an exact static room; 1 ms pose boundaries. MuJoCo rolling origin bound 0.5 mm. Range agreement with an interpolated measured-pose reference, not hardware precision."
+  },
+  "runtime": {
+    "source": "docs/performance-tradeoffs.md",
+    "labels": ["Official Livox / Gazebo 9", "Isaac / Warp · bulk history"],
+    "whole_loop_ms": [134.17, 110.70],
+    "sensor_interval_ms": [122.67, 13.50],
+    "scope": "Original matched static-room baseline, 400,000 emissions / two simulated seconds, Ryzen 9 9950X3D + RTX 5090. Warp uses opt-in caller-owned history, headless stepping and USD writeback off. Native physics runs in both loops. Different scan directions and runtime boundaries; not identical-ray microbenchmarks or full-robot capacity."
+  },
+  "transport": {
+    "source": "docs/transport-evaluation.md",
+    "labels": ["PointCloud2", "Livox CustomMsg"],
+    "p50_ms": [0.410, 25.385],
+    "p99_ms": [0.629, 39.855],
+    "clouds_received_per_format": 305,
+    "imu_received_per_format": 6100,
+    "scope": "One 30-second full-rate single-stream Cyclone reference per format, Apple M5 Max / macOS arm64 / rclpy. Interval is publisher-call start to Python callback, including representation, deserialization and scheduling; not isolated DDS wire time. Includes five warmup packets in delivery counts."
+  }
+}

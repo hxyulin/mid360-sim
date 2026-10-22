@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- Add reproducible nominal-scan, motion, runtime and ROS delivery figures, a
+  visual results guide and a concise README evidence table with scoped claims,
+  plotted source data and checksummed asset provenance.
+
 ## 0.1.0 — 2026-10-23
 
 ### Rust API

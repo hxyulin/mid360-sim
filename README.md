@@ -17,6 +17,11 @@ each return's acquisition time. The default model emits 200,000 rays/s across
 four interleaved lanes, with a representative 18.2-hour cycle. It is an empirical
 approximation, not a calibrated Livox hardware emulator.
 
+![Nominal scan coverage: 20,000 emissions in 100 ms and 200,000 in one second, generated from the compact model.](docs/public/figures/scan-pattern.webp)
+
+[See the figures and measured results](docs/guide/results.md), including motion
+fidelity, GPU runtime and native ROS delivery with explicit test conditions.
+
 | Use it with | Integration | Output |
 |---|---|---|
 | Your Rust simulator | [Dependency-free core](docs/install/rust.md) | Local points, ranges and timestamps |
@@ -69,6 +74,21 @@ backends, including the official plugin, with explicit measurement scopes.
 See [capabilities and status](docs/guide/status.md) for supported interfaces,
 caller responsibilities and remaining validation. Guides track the current
 source; check a release archive's source revision before relying on newer APIs.
+
+## Measured results
+
+Selected bounded experiments; each result has its own workload and reference.
+
+| Question | Recorded result | Conditions and evidence |
+|---|---|---|
+| Does rolling acquisition preserve motion? | **5.666 → 0.294 mm RMS** for MuJoCo | Two-second MoCap stress replay in an exact room; reference agreement, not hardware precision. [Motion results](docs/backend-ground-truth.md) |
+| Can GPU tracing run faster than real time? | **18.07× real time** in the original Warp loop | Static room, RTX 5090, headless bulk history, USD writeback off; includes native physics. [Runtime scope](docs/performance-tradeoffs.md) |
+| Do cloud and IMU messages reach a real subscriber? | **305/305 clouds + 6,100/6,100 IMUs** per format | One 30-second Cyclone/rclpy reference each on macOS arm64; loaded cases also show losses. [Transport results](docs/transport-evaluation.md) |
+
+![Original motion replay range RMS: held MuJoCo 5.666 mm, rolling MuJoCo 0.294 mm, Warp bulk history 0.251 mm.](docs/public/figures/motion-accuracy.svg)
+
+[Visual results and figure sources](docs/guide/results.md) ·
+[Complete validation and limits](docs/guide/validation.md)
 
 ## Development
 

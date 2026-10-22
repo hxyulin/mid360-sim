@@ -25,6 +25,10 @@ input packing, retaining the same boundary-pose interpolation and static scene.
 The [current tradeoff report](performance-tradeoffs.md) adds runtimes, actual
 native official-plugin execution, RTX rates and all cross-backend scope limits.
 
+![Original MoCap range residuals for held MuJoCo, rolling MuJoCo and Warp bulk history.](/figures/motion-accuracy.svg)
+
+[Figure data and context](guide/results.md).
+
 ## Reference and protocol
 
 The [JEPLO EIL_Mask2 audit](motion-ground-truth.md) records source provenance,

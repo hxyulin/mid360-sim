@@ -78,6 +78,10 @@ executor scheduling and receive deadlines all participate. The corresponding
 PointCloud2 case delivered everything; its worst individual callback interval was
 5.225 ms. Clean native process shutdown was required in all normally reported runs.
 
+![One-stream native ROS Python callback interval p50 and p99 for PointCloud2 and CustomMsg.](/figures/ros-callbacks.svg)
+
+[Figure data and context](guide/results.md).
+
 ## RM HTTP/JSON
 
 These short cases use one sequential Python polling client, ten-millisecond

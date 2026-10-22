@@ -55,6 +55,15 @@ try {
   await page.getByRole('heading', { level: 1 }).waitFor();
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Scanned-geometry guide overflows on mobile');
   await page.screenshot({ path: 'local-assets/docs-review/scanned-geometry-mobile.png', fullPage: true });
+  await page.goto(origin + 'guide/results.html');
+  await page.getByRole('heading', { name: 'Results at a glance', level: 1 }).waitFor();
+  assert.equal(await page.locator('main img').count(), 4);
+  await page.waitForFunction(() => [...document.querySelectorAll('main img')].every(img => img.complete && img.naturalWidth > 0));
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Visual results guide overflows on mobile');
+  const figureData = await page.request.get(origin + 'figures/measurements.json');
+  assert(figureData.ok(), 'Figure source data is unavailable');
+  assert.equal((await figureData.json()).motion.rms_mm[1], 0.294);
+  await page.screenshot({ path: 'local-assets/docs-review/results-mobile.png', fullPage: true });
   assert.deepEqual(errors, []);
   console.log('Docs navigation, local search, mobile layout and console checks pass.');
 } finally {

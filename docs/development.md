@@ -67,6 +67,11 @@ pnpm docs:test
 pnpm docs:preview --host 127.0.0.1
 ```
 
+Regenerate the result figures using `python scripts/generate-doc-figures.py`
+with `requirements-analysis.txt`; `python scripts/generate-doc-figures.py --check`
+checks evidence values and asset provenance without plotting dependencies.
+See [the visual results guide](guide/results.md#inspect-or-regenerate).
+
 The site base is `/mid360-sim/`; open that path when previewing. Local search,
 sidebar navigation and installation guides are built from committed Markdown.
 Do not disable dead-link checks to make the build pass. Keep research details

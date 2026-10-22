@@ -16,7 +16,7 @@ export default defineConfig({
         tagline: 'A compact MID-360 scan approximation with explicit acquisition times, simulator adapters and optional ROS 2 publishing.',
         actions: [
           { theme: 'brand', text: 'Choose your simulator', link: '/guide/getting-started' },
-          { theme: 'alt', text: 'Understand the model', link: '/guide/acquisition' },
+          { theme: 'alt', text: 'See measured results', link: '/guide/results' },
         ],
       },
       features: [
@@ -45,6 +45,7 @@ export default defineConfig({
       { text: 'Start here', items: [
         { text: 'Choose your simulator', link: '/guide/getting-started' },
         { text: 'Capabilities and status', link: '/guide/status' },
+        { text: 'Results at a glance', link: '/guide/results' },
         { text: 'Acquisition and motion', link: '/guide/acquisition' },
         { text: 'Scan patterns', link: '/guide/patterns' },
         { text: 'Use with navigation', link: '/guide/navigation' },

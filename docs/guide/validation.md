@@ -7,6 +7,8 @@ experiments. It is an empirical scan approximation, not a calibrated MID-360
 return emulator. Start with the [current runtime/accuracy comparison](../performance-tradeoffs.md)
 for simulator measurements; use the evidence below for the question you need answered.
 
+[See the visual results](results.md) for a compact tour of the same evidence.
+
 ## Current scope
 
 See [capabilities and status](status.md) for implemented interfaces, ownership

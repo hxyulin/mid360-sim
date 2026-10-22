@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "evidence_source_revision": "e45207c15417c2011cef8b5075f562b5bd0dfa38",
+  "generator_sha256": "ff61508790dfc8d91bdf725d9810902d776601835f2cdce1714952f748a0f189",
+  "generator": "scripts/generate-doc-figures.py",
+  "versions": {
+    "numpy": "2.0.2",
+    "matplotlib": "3.9.4"
+  },
+  "measurements_sha256": "bf8bd554e62c2ce6e27105a211c310423216f8ec66b75f3b8def2d86305a9e76",
+  "inputs": {
+    "docs/performance-tradeoffs.md": "4b16c19d19b5d30724a3838a892c2178efd154953d3860820eddf8c5322f0d02",
+    "docs/transport-evaluation.md": "cb054108545d283dac6b6e8fa54f9ec3551b89404f0a0b9b18c91347a916a353",
+    "integrations/python/mid360_sim/nominal.json": "d6f72e21a5e318446c2ec737e890beb5a90dff436ec48aed5319beb281d53175"
+  },
+  "figures": {
+    "scan-pattern.webp": {
+      "title": "Nominal scan coverage at 100 ms and one second",
+      "description": "Generated nominal directions, all emissions from index zero; no scene, hardware capture, noise or material response.",
+      "sha256": "922445d2c2d89275e8006f15e6501fa557f8a995e881851b1df80c87c7957c13"
+    },
+    "motion-accuracy.svg": {
+      "title": "Measured motion replay: held and rolling acquisition",
+      "description": "Original baseline: 400,000 emissions over a two-second high-motion MoCap segment in an exact static room; 1 ms pose boundaries. MuJoCo rolling origin bound 0.5 mm. Range agreement with an interpolated measured-pose reference, not hardware precision.",
+      "sha256": "8a20ae6ae4842cd19ba4e3296a45be4924359998500dc2fdd3100508eeb0d1ec"
+    },
+    "runtime.svg": {
+      "title": "Original static-room runtime comparison",
+      "description": "Original matched static-room baseline, 400,000 emissions / two simulated seconds, Ryzen 9 9950X3D + RTX 5090. Warp uses opt-in caller-owned history, headless stepping and USD writeback off. Native physics runs in both loops. Different scan directions and runtime boundaries; not identical-ray microbenchmarks or full-robot capacity.",
+      "sha256": "1596585600bba91d0f15f3431ca6f9624ae6c3ba13668484d786d275d97c2b0b"
+    },
+    "ros-callbacks.svg": {
+      "title": "ROS Python callback intervals for two message formats",
+      "description": "One 30-second full-rate single-stream Cyclone reference per format, Apple M5 Max / macOS arm64 / rclpy. Interval is publisher-call start to Python callback, including representation, deserialization and scheduling; not isolated DDS wire time. Includes five warmup packets in delivery counts.",
+      "sha256": "36d1b9115aa09253a26eaabc85727f02a4279629cf349106628b2b36f3e5e152"
+    }
+  }
+}
