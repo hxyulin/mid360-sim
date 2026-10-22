@@ -1,0 +1,22 @@
+ETH3D Office worked-example illustrations
+
+Source: ETH3D Office clean Faro laser scans, https://eth3d.ethz.ch/
+Authors: Thomas Schöps, Johannes L. Schönberger, Silvano Galliani,
+Torsten Sattler, Konrad Schindler, Marc Pollefeys and Andreas Geiger.
+Publication: A Multi-View Stereo Benchmark with High-Resolution Images and
+Multi-Camera Videos, CVPR 2017.
+
+Files: office-geometry.webp, nominal-points.webp, coverage-error.svg.
+Dataset and these derived illustrations: Creative Commons
+Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0).
+License: https://creativecommons.org/licenses/by-nc-sa/4.0/
+Original data ownership is retained. No source scan or generated mesh is included.
+
+Changes by the mid360-sim example: voxelization, normal estimation, ball-pivot
+triangulation, bounded edge removal, synthetic grey shading, native raycasting,
+height-coloured point plotting, cropping and miss-aware numerical plotting.
+Pinned mirror revision: fb2ddc77390926c335c48dace97533f519fdd571.
+Input hashes and example results: report.json in this directory.
+
+These data-derived illustrations are separate from the simulator implementation's
+MIT OR Apache-2.0 license. The example source code retains that code license.

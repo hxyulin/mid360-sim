@@ -46,6 +46,24 @@ hardware profile does not copy the official Livox coefficient table. See
 `docs/hardware-fit.md` for filtering, withheld data, phase calibration and limits.
 
 
+## Public ETH3D worked example
+
+`examples/eth3d/` contains original MIT OR Apache-2.0 example code. No source
+point cloud or generated mesh is bundled. The geometry illustrations in
+`docs/public/eth3d/office-geometry.webp`, `nominal-points.webp` and
+`coverage-error.svg` derive from
+ETH3D Office, by Thomas Schöps, Johannes L. Schönberger, Silvano Galliani,
+Torsten Sattler, Konrad Schindler, Marc Pollefeys and Andreas Geiger,
+"A Multi-View Stereo Benchmark with High-Resolution Images and Multi-Camera
+Videos", CVPR 2017. Original data ownership is retained.
+
+Source: https://eth3d.ethz.ch/. Dataset and derived scene illustrations:
+Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International,
+https://creativecommons.org/licenses/by-nc-sa/4.0/.
+Changes: voxelization, triangulation, synthetic shading, raycasting and plotting.
+These data-derived illustrations are separate from the code's permissive license;
+see `docs/public/eth3d/ATTRIBUTION.txt` and the scanned-geometry guide.
+
 ## Optional Isaac Sim adapter
 
 The adapter in `integrations/isaac-sim/` is original MIT OR Apache-2.0 code

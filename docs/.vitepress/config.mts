@@ -49,6 +49,9 @@ export default defineConfig({
         { text: 'MuJoCo', link: '/install/mujoco' },
         { text: 'Gazebo Harmonic', link: '/install/gazebo' },
       ] },
+      { text: 'Worked examples', items: [
+        { text: 'Scanned geometry → LiDAR', link: '/guide/scanned-geometry' },
+      ] },
       { text: 'Release and contribute', items: [
         { text: 'Distribution', link: '/distribution' },
         { text: 'Development', link: '/development' },

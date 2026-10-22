@@ -24,7 +24,7 @@ for (const file of files.filter(f => f.endsWith('.html'))) {
     checked++;
   }
 }
-for (const page of ['index.html', 'install/isaac-sim.html', 'install/mujoco.html', 'install/gazebo.html', 'install/ros2.html', 'install/rust.html', 'distribution.html']) {
+for (const page of ['index.html', 'install/isaac-sim.html', 'install/mujoco.html', 'install/gazebo.html', 'install/ros2.html', 'install/rust.html', 'distribution.html', 'guide/scanned-geometry.html']) {
   if (!files.includes(path.join(root, page))) throw new Error(`Missing ${page}`);
 }
 console.log(`Checked ${checked} production links/assets across ${files.filter(f => f.endsWith('.html')).length} HTML pages.`);

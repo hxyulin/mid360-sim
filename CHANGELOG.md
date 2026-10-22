@@ -6,6 +6,8 @@
 
 ### Documentation
 
+- Add a reproducible public ETH3D Office → optical mesh → MuJoCo example,
+  with held-out range/coverage results, attributed figures and explicit limits.
 - Refresh capability/validation guides for native official-plugin execution,
   MuJoCo rolling scans and Isaac history/partition modes; separate accuracy metrics.
 - Move historical Isaac benchmarks out of installation instructions, link the

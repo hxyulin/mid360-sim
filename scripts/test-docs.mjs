@@ -33,6 +33,13 @@ try {
   await page.locator('.VPFeatures, .VPLocalSearchBox').last().waitFor();
   await page.locator('.VPLocalSearchBox .result').first().waitFor();
   await page.keyboard.press('Escape');
+  await page.goto(origin + 'guide/scanned-geometry.html');
+  await page.getByRole('heading', { name: 'Turn public scans into a LiDAR scene', level: 1 }).waitFor();
+  assert.equal(await page.locator('main img').count(), 3);
+  await page.waitForFunction(() => [...document.querySelectorAll('main img')].every(img => img.complete && img.naturalWidth > 0));
+  const sceneReport = await page.request.get(origin + 'eth3d/report.json');
+  assert(sceneReport.ok(), 'ETH3D report is unavailable');
+  assert.equal((await sceneReport.json()).settings.scan2_used_for_geometry, false);
   await mkdir('local-assets/docs-review', { recursive: true });
   await page.goto(origin);
   await page.screenshot({ path: 'local-assets/docs-review/desktop.png', fullPage: true });
@@ -41,6 +48,10 @@ try {
   await page.getByRole('heading', { level: 1 }).waitFor();
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Mobile page overflows horizontally');
   await page.screenshot({ path: 'local-assets/docs-review/mobile.png', fullPage: false });
+  await page.goto(origin + 'guide/scanned-geometry.html');
+  await page.getByRole('heading', { level: 1 }).waitFor();
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Scanned-geometry guide overflows on mobile');
+  await page.screenshot({ path: 'local-assets/docs-review/scanned-geometry-mobile.png', fullPage: true });
   assert.deepEqual(errors, []);
   console.log('Docs navigation, local search, mobile layout and console checks pass.');
 } finally {

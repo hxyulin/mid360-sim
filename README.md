@@ -8,6 +8,8 @@ A rolling MID-360 LiDAR approximation for robotics simulators.
 [Installation](docs/guide/getting-started.md) ·
 [Validation](docs/guide/validation.md) · [Changelog](CHANGELOG.md)
 
+Worked example: [turn public laser scans into a simulated LiDAR scene](docs/guide/scanned-geometry.md).
+
 Generate a compact, nonrepeating scan, query your simulator's scene, and keep
 each return's acquisition time. The default model emits 200,000 rays/s across
 four interleaved lanes, with a representative 18.2-hour cycle. It is an empirical
@@ -74,4 +76,5 @@ preparation. `cargo test --locked` runs the Rust core without ROS or a simulator
 ## License
 
 MIT OR Apache-2.0. [NOTICE.md](NOTICE.md) records Livox provenance, derived model
-parameters and optional runtime dependencies.
+parameters and optional runtime dependencies. The ETH3D example's data-derived
+documentation illustrations retain their separate CC BY-NC-SA 4.0 terms.

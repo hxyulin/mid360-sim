@@ -1,0 +1,115 @@
+{
+  "source": {
+    "dataset": "ETH3D Office clean Faro scans",
+    "upstream": "https://eth3d.ethz.ch/datasets",
+    "mirror_revision": "fb2ddc77390926c335c48dace97533f519fdd571",
+    "files": {
+      "scan1.ply": {
+        "bytes": 361952514,
+        "sha256": "2d657e015b5111c7df1662677a6c0816e94859b331ca9718bb1f60b7f7def3e8"
+      },
+      "scan2.ply": {
+        "bytes": 366947229,
+        "sha256": "27132032ae29cd6c9acf50df81464e0e331fadfa1453d0545121bd8cb3e72044"
+      },
+      "scan_alignment.mlp": {
+        "bytes": 509,
+        "sha256": "b9b4c539b04c0a7493a3a8d013871f83daaf2895f007432e9ba4562061eba53c"
+      }
+    },
+    "license": "CC-BY-NC-SA-4.0",
+    "mirror_hashes_not_upstream_archive_verification": true
+  },
+  "seed": 20261022,
+  "settings": {
+    "voxel_m": 0.01,
+    "normal_radius_m": 0.04,
+    "normal_neighbors": 32,
+    "pivot_radii_m": [
+      0.015,
+      0.025,
+      0.04
+    ],
+    "maximum_edge_m": 0.06,
+    "range_filter_m": 20,
+    "train": "scan1 filtered indices i%5 != 0",
+    "evaluation_rays_per_view": 200000,
+    "scan2_used_for_geometry": false,
+    "hole_filling": false
+  },
+  "geometry": {
+    "vertices": 772989,
+    "triangles": 1518491
+  },
+  "evaluation": {
+    "same_view": {
+      "rays": 200000,
+      "hit_fraction": 0.991495,
+      "within_20mm_fraction": 0.99032,
+      "early_over_20mm_fraction": 0.00077,
+      "late_over_20mm_fraction": 0.000405,
+      "median_mm": 0.2736205794506841,
+      "p95_mm": 1.8180650401163618,
+      "rms_mm": 9.985509849650054
+    },
+    "withheld_viewpoint": {
+      "rays": 200000,
+      "hit_fraction": 0.87312,
+      "within_20mm_fraction": 0.86,
+      "early_over_20mm_fraction": 0.0009,
+      "late_over_20mm_fraction": 0.01222,
+      "median_mm": 0.7716854601086398,
+      "p95_mm": 3.2883815857452228,
+      "rms_mm": 114.47748904035248
+    }
+  },
+  "native": {
+    "backend": "production mid360_sim.mujoco.MujocoSensor / mj_multiRay",
+    "mujoco_version": "3.7.0",
+    "compile_s": 1.2654009589459747,
+    "measured_ray_replay": {
+      "same_view": {
+        "rays": 200000,
+        "hit_fraction": 0.991495,
+        "within_20mm_fraction": 0.99032,
+        "early_over_20mm_fraction": 0.00077,
+        "late_over_20mm_fraction": 0.000405,
+        "median_mm": 0.2735661659254429,
+        "p95_mm": 1.8188123175181912,
+        "rms_mm": 9.985518091971247
+      },
+      "withheld_viewpoint": {
+        "rays": 200000,
+        "hit_fraction": 0.873115,
+        "within_20mm_fraction": 0.859995,
+        "early_over_20mm_fraction": 0.0009,
+        "late_over_20mm_fraction": 0.01222,
+        "median_mm": 0.7716188723150275,
+        "p95_mm": 3.2874920872405955,
+        "rms_mm": 114.4778090329662
+      }
+    },
+    "nominal": {
+      "emissions": 2000000,
+      "simulated_s": 10,
+      "acquisition_wall_s": 2.189751167083159,
+      "realtime_factor": 4.566728928072874,
+      "valid_fraction": 0.8481615,
+      "mount": "scan2 source pose",
+      "phase_matched": false
+    },
+    "scope": "Stationary virtual MID360 in Faro-derived geometry; not hardware MID360 returns. Timing excludes compilation, rendering, physics stepping and publication."
+  },
+  "adapter_sha256": {
+    "mujoco.py": "2e18a943f9f39f593d3961d45ed637827a0753bbd34cd28d32c2a68c0ac40e1a",
+    "pattern.py": "605dd63388b056091b9b98916d6f84b5596bd510d5cfbcb4b5126cb91387eeb3",
+    "nominal.json": "d6f72e21a5e318446c2ec737e890beb5a90dff436ec48aed5319beb281d53175"
+  },
+  "elapsed_s": 24.606583750108257,
+  "caveats": [
+    "Faro scene reconstruction accuracy, not a calibrated MID360 comparison.",
+    "Range errors conditional on hits; coverage includes misses.",
+    "Only scan1 builds the exported/simulated mesh; scan2 remains withheld.",
+    "No motion, material-response, dropout or real device phase validation."
+  ]
+}
