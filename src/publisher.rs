@@ -48,7 +48,17 @@ impl LivoxPublisher {
     /// Publish validated measured points. Header/timebase use simulation time;
     /// data remain distorted local sensor points with original per-point offsets.
     /// Reflectivity/tag/lane are explicit simulation policies, not sensor truth.
+    /// A single retained point returns an error: rclrs 0.8 cannot safely access
+    /// that Livox sequence. Use PointCloud2 or aggregate packets in the caller.
     pub fn publish(&self, packet: &LivoxPacket) -> Result<()> {
+        // rclrs 0.8 checks the C sequence storage against the Rust proxy size
+        // during reset: one 20-byte CustomPoint is smaller than its 24-byte
+        // proxy on 64-bit targets. Its public API offers no exact-length bypass.
+        // Reject before reset rather than padding the measurement or panicking.
+        anyhow::ensure!(
+            packet.points.len() != 1,
+            "single-point Livox packets are unsupported by rclrs 0.8 dynamic sequences; use PointCloud2 or caller-owned packet aggregation"
+        );
         let mut msg = self.points_metadata.create()?;
         scalar!(msg, "timebase", Uint64, packet.timebase_ns);
         scalar!(

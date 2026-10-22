@@ -55,6 +55,14 @@ runtime libraries must be sourced through `scripts/with-ros.sh` or an equivalent
 ROS environment. Release source includes the pinned interface definitions;
 there is no portable, ROS-free publisher executable.
 
+With the pinned rclrs 0.8 dynamic sequence implementation, `LivoxPublisher`
+returns a descriptive error for packets containing exactly one retained point,
+before entering the upstream sequence operation that would panic. Empty
+(all-miss) packets and packets with two or more points remain supported. Use
+`PointCloudPublisher` (PointCloud2) for single-point packets, or aggregate
+acquisitions in the caller while preserving the packet timing contract. The
+publisher never pads or duplicates measurements to bypass this limitation.
+
 For local Cyclone DDS trials (the profile intentionally excludes remote hosts):
 
 ```sh
