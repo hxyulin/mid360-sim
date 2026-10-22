@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2026 hxyulin <hxyulin@proton.me>
-//! Safe rclrs dynamic publishers using installed standard/Livox C introspection.
-//! No generated Rust bindings or unsafe code. Publishing may block in the RMW;
+//! Safe rclrs publishers using installed standard/Livox interfaces.
+//! The `ros2` path uses C introspection; `ros2-typed` additionally exposes a
+//! generated RMW-native Livox endpoint. No local unsafe code. Publishing may block in the RMW;
 //! call outside a shared simulation worker or provide caller-owned bounded queues.
 //! Each endpoint retains message metadata; each publish creates a fresh owned
 //! message because rclrs consumes it when publishing.
@@ -11,6 +12,10 @@ use rclrs::{
     DynamicMessageMetadata, DynamicPublisher, IntoPrimitiveOptions, MessageTypeName, Node,
     SequenceValueMut, SimpleValueMut, ValueMut,
 };
+#[cfg(feature = "ros2-typed")]
+mod typed;
+#[cfg(feature = "ros2-typed")]
+pub use typed::TypedLivoxPublisher;
 macro_rules! scalar {
     ($view:expr,$name:expr,$kind:ident,$value:expr) => {
         match $view.get_mut($name) {
@@ -108,17 +113,25 @@ impl LivoxPublisher {
     }
     /// Publish explicit simulation time. No wall-clock timestamp is substituted.
     pub fn publish_clock(&self, time_ns: u64) -> Result<()> {
-        let time = RosTime::from_ns(time_ns).map_err(anyhow::Error::msg)?;
-        let mut msg = self.clock_metadata.create()?;
-        if let Some(ValueMut::Simple(SimpleValueMut::Message(mut clock))) = msg.get_mut("clock") {
-            scalar!(clock, "sec", Int32, time.sec);
-            scalar!(clock, "nanosec", Uint32, time.nanosec);
-        } else {
-            bail!("ROS clock schema mismatch");
-        }
-        self.clock.publish(msg)?;
-        Ok(())
+        publish_clock(&self.clock, &self.clock_metadata, time_ns)
     }
+}
+
+fn publish_clock(
+    publisher: &DynamicPublisher,
+    metadata: &DynamicMessageMetadata,
+    time_ns: u64,
+) -> Result<()> {
+    let time = RosTime::from_ns(time_ns).map_err(anyhow::Error::msg)?;
+    let mut msg = metadata.create()?;
+    if let Some(ValueMut::Simple(SimpleValueMut::Message(mut clock))) = msg.get_mut("clock") {
+        scalar!(clock, "sec", Int32, time.sec);
+        scalar!(clock, "nanosec", Uint32, time.nanosec);
+    } else {
+        bail!("ROS clock schema mismatch");
+    }
+    publisher.publish(msg)?;
+    Ok(())
 }
 
 // Adapted from rm-simulator c3784e168cf21167f15c8728ba8e8edb8d1d80a9,

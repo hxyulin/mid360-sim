@@ -6,9 +6,13 @@
 #[path = "synchronized/fixture.rs"]
 mod fixture;
 use fixture::{EPOCH_NS, IMU_PERIOD_NS, Motion, PACKET_NS, Room};
+#[cfg(not(feature = "ros2-typed"))]
+use mid360_sim::publisher::LivoxPublisher;
+#[cfg(feature = "ros2-typed")]
+use mid360_sim::publisher::TypedLivoxPublisher as LivoxPublisher;
 use mid360_sim::{
     LivoxConfig, LivoxPacket,
-    publisher::{ImuPublisher, LivoxPublisher, PointCloudPublisher},
+    publisher::{ImuPublisher, PointCloudPublisher},
     sensor::{Effects, RollingFrame, Sensor},
 };
 use rclrs::CreateBasicExecutor;

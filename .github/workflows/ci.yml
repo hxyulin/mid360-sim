@@ -82,3 +82,8 @@ jobs:
       - run: pixi run test
       - run: pixi run smoke
       - run: pixi run smoke --stride 3
+      - run: pixi run typed-test
+      - run: pixi run typed-smoke
+      - run: pixi run typed-smoke --stride 3
+      - run: pixi run bash scripts/with-ros.sh cargo clippy --features ros2-typed --all-targets --locked -- -D warnings
+      - run: pixi run bash scripts/with-ros.sh cargo clippy --manifest-path examples/ros-construction/Cargo.toml --locked -- -D warnings

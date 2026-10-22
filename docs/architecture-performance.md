@@ -2,6 +2,10 @@
 <!-- Copyright (c) 2026 hxyulin <hxyulin@proton.me> -->
 # Architecture and shared optical work
 
+For typical one- or two-sensor workloads, see the follow-up
+[native query and ROS construction investigation](single-sensor-performance.md).
+It measures the next targets separately from the multi-device optical experiment.
+
 The first useful architectural change is to separate reusable optical directions
 from device-specific acquisition. `sensor::PreparedRays` owns an immutable,
 bounded emission window. Multiple sensors can borrow it, apply their own effects

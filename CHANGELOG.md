@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- Add an opt-in `ros2-typed` Livox endpoint with owned RMW-native storage,
+  singleton support, packet validation and matching simulation-clock publication.
+  Enable it in the demos with `ros2-typed`; keep the dynamic `ros2` path available.
+  Add native field/size-transition regressions and typed smoke/CI tasks.
+
+- Add reproducible one/two-sensor native query and typed ROS construction
+  experiments, including motion/edge checks and optional-endpoint adoption limits.
+
 - Add optional immutable prepared-ray windows for aligned Rust sensors, sharing
   optical calculations while retaining each device's effects, epoch and live
   per-emission geometry queries; include bounded-memory APIs and doctests.

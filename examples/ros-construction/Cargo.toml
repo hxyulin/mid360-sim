@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright (c) 2026 hxyulin <hxyulin@proton.me>
+[package]
+name = "mid360-ros-construction-bench"
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+mid360-sim = { path = "../..", version = "0.1.0", features = ["ros2-typed"] }
+rclrs = "=0.8.0"
+ros-env = "=0.3.0"
+anyhow = "1"
+
+[lints.rust]
+unsafe_code = "forbid"

@@ -2,6 +2,13 @@
 <!-- Copyright (c) 2026 hxyulin <hxyulin@proton.me> -->
 # Development
 
+The [one/two-sensor architecture investigation](single-sensor-performance.md)
+includes native MuJoCo batch-query and isolated typed/dynamic ROS construction
+benchmarks, their reproduction commands and accuracy limits.
+The optional typed endpoint is covered by `pixi run typed-test`, both
+`pixi run typed-smoke` variants (ordinary and `--stride 3`), and native Clippy
+with `--features ros2-typed`. These require the generated Livox Rust interfaces.
+
 Run commands from the repository root. Use Python 3.12 for repository/release
 tooling (the adapter itself supports Python 3.10+). Simulator dependencies remain optional;
 ordinary Rust checks do not require ROS, a GPU or another simulator.

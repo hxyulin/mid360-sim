@@ -290,11 +290,13 @@ fn main() -> Result<()> {
     Ok(())
 }
 #[cfg(feature = "ros2")]
+#[cfg(not(feature = "ros2-typed"))]
+use mid360_sim::publisher::LivoxPublisher;
+#[cfg(feature = "ros2-typed")]
+use mid360_sim::publisher::TypedLivoxPublisher as LivoxPublisher;
+#[cfg(feature = "ros2")]
 struct RosOutput {
-    publishers: Option<(
-        mid360_sim::publisher::LivoxPublisher,
-        mid360_sim::publisher::ImuPublisher,
-    )>,
+    publishers: Option<(LivoxPublisher, mid360_sim::publisher::ImuPublisher)>,
     cloud: Option<mid360_sim::publisher::PointCloudPublisher>,
     tf: Option<mid360_sim::publisher::TransformPublisher>,
     _node: Option<rclrs::Node>,
@@ -319,7 +321,7 @@ impl RosOutput {
             let context = rclrs::Context::new(std::iter::empty::<String>(), Default::default())?;
             let executor = context.create_basic_executor();
             let node = executor.create_node("mid360_synchronized_example")?;
-            let lidar = mid360_sim::publisher::LivoxPublisher::new(&node, "/synchronized/lidar")?;
+            let lidar = LivoxPublisher::new(&node, "/synchronized/lidar")?;
             let qos = if opt.reliable {
                 rclrs::QoSProfile::topics_default()
             } else {

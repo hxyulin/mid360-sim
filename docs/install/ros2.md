@@ -55,11 +55,45 @@ runtime libraries must be sourced through `scripts/with-ros.sh` or an equivalent
 ROS environment. Release source includes the pinned interface definitions;
 there is no portable, ROS-free publisher executable.
 
+### Optional typed Livox endpoint
+
+Enable `ros2-typed` to use `publisher::TypedLivoxPublisher`. It publishes the same
+Driver 2 `CustomMsg` with fresh owned RMW-native storage, avoiding per-point
+dynamic field lookup. It supports all-miss, singleton and larger packets, while
+preserving first-emission timebases, retained offsets, local coordinates, device
+IDs and synthetic reflectivity/tag/lane fields. It validates headers, bounded
+counts, finite coordinates and increasing offsets before encoding. Use
+`LivoxPacket::from_scan` to retain the acquisition validation contract.
+
+This feature requires generated Livox Rust interfaces exported through `ros-env`.
+The Pixi interface build supplies them in the ignored `.ros/install` tree. A
+C-introspection-only installation can continue using `ros2` and
+`publisher::LivoxPublisher`. Neither feature changes the dependency-free default
+core; generated bindings are not checked into source. Only macOS arm64 DDS has
+been validated locally; the platform lockfile does not establish Linux runtime
+or generated-interface validation.
+
+```sh
+pixi run typed-test
+pixi run typed-smoke
+pixi run typed-smoke --stride 3
+pixi run bash scripts/with-ros.sh cargo run --release --features ros2-typed --locked -- --frames 100
+```
+
+The room demo, synchronized example and transport example select the typed
+Livox endpoint when compiled with `ros2-typed`. Builds with `ros2` alone retain
+their dynamic endpoint. PointCloud2, IMU, TF and clock schemas/QoS remain the
+same. Only one publisher should own `/clock`, including multi-device hosts.
+Publishing can still block; use the same caller-owned bounded worker/queue
+policy. See the [one/two-sensor evaluation](../single-sensor-performance.md).
+
+### Dynamic singleton limitation
+
 With the pinned rclrs 0.8 dynamic sequence implementation, `LivoxPublisher`
 returns a descriptive error for packets containing exactly one retained point,
 before entering the upstream sequence operation that would panic. Empty
 (all-miss) packets and packets with two or more points remain supported. Use
-`PointCloudPublisher` (PointCloud2) for single-point packets, or aggregate
+`TypedLivoxPublisher` with `ros2-typed`, `PointCloudPublisher` (PointCloud2), or aggregate
 acquisitions in the caller while preserving the packet timing contract. The
 publisher never pads or duplicates measurements to bypass this limitation.
 

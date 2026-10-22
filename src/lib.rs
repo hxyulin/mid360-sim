@@ -2,6 +2,7 @@
 // Copyright (c) 2026 hxyulin <hxyulin@proton.me>
 //! Standalone deterministic fitted MID-360 patterns and scene-query acquisitions.
 //! The optional `ros2` feature enables rclrs and requires a sourced ROS installation.
+//! `ros2-typed` additionally enables a generated RMW-native Livox publisher.
 //! Measured points remain in each emission's sensor frame; no world truth pose is sent.
 //!
 //! Start with [`sensor::Scene`] and [`sensor::Sensor`] to query an existing physics

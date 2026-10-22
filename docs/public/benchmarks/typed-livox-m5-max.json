@@ -1,0 +1,150 @@
+{
+  "date": "2026-10-23",
+  "host": "Apple M5 Max / macOS arm64",
+  "parent_revision": "249b53e24aaf2f74562ab0d44373dd0d49c1df4c",
+  "dirty_source": true,
+  "rclrs": "0.8.0",
+  "ros_env": "0.3.0",
+  "rmw": "rmw_fastrtps_cpp",
+  "protocol": "Actual LivoxPublisher::publish and TypedLivoxPublisher::publish, cached endpoints, fresh owned messages. Two warmups then ten alternating pairs. Each timing averages ten serial packet sets for one or two distinct endpoints. Preexisting input packets; excludes acquisition/conversion and clock publishing. Typed includes packet validation. Subscription counts checked zero before/after every timing; no subscriber or end-to-end latency claim. Shared workstation, no CPU pinning. Default release flags.",
+  "source_sha256": {
+    "Cargo.toml": "760dba363a055a45e5d5c3ce62e7867110a9b1d7af7fe3a6f9b082b528ce79c7",
+    "Cargo.lock": "7d9d580b6e561e7808434f3eeffc712d58d041c99397000f7962361e3b89fd3b",
+    "src/publisher.rs": "1351be665010322827d4cd22b015406d9dcd17524485f914521a0f59cc50b140",
+    "src/publisher/typed.rs": "eff5ae9cba7b466504a49c3ce1022475f21962e186736796633cc7f7b1d25501",
+    "examples/ros-construction/Cargo.toml": "132393c05a64e687ecfc35b89b1674c02cb1998cab7ad86635aed78928ce2204",
+    "examples/ros-construction/Cargo.lock": "9154ddac357d1f8a5385f120756e823c183905111be7f96bd8fb7eb37c28668c",
+    "examples/ros-construction/src/main.rs": "02da8b5e13bdcc55a62221f8f6c021298de41500b656714e0f4bfdd777f627d0"
+  },
+  "binary_sha256": "4816ace717e7c8a85b55f7d69302e720b136097738b36fdd5430a52bcaa0cfc0",
+  "results": [
+    {
+      "points": 6667,
+      "sensors": 1,
+      "dynamic_ms": 0.723119,
+      "typed_ms": 0.408825,
+      "samples_ms": [
+        [
+          0.750375,
+          0.7210833,
+          0.7176625,
+          0.7137833,
+          0.7349,
+          0.7251542,
+          0.7183791,
+          0.7363584000000001,
+          0.7365375000000001,
+          0.7188708
+        ],
+        [
+          0.41502500000000003,
+          0.40454159999999995,
+          0.4001083,
+          0.40855830000000004,
+          0.4009167,
+          0.4130583,
+          0.4239625,
+          0.4138958,
+          0.4090916,
+          0.4048083
+        ]
+      ]
+    },
+    {
+      "points": 6667,
+      "sensors": 2,
+      "dynamic_ms": 1.546548,
+      "typed_ms": 0.899333,
+      "samples_ms": [
+        [
+          1.7882624999999999,
+          1.6113166,
+          1.5670333,
+          1.5802957999999998,
+          1.5317458000000002,
+          1.4940290999999999,
+          1.4893,
+          1.4744917,
+          1.4830166,
+          1.56135
+        ],
+        [
+          0.9943166999999999,
+          1.0623666,
+          0.8892916000000001,
+          0.9093749999999999,
+          0.8108583,
+          0.8097667,
+          0.8331875000000001,
+          0.8315082999999999,
+          0.9322791,
+          0.9473792
+        ]
+      ]
+    },
+    {
+      "points": 20000,
+      "sensors": 1,
+      "dynamic_ms": 2.22286,
+      "typed_ms": 1.222119,
+      "samples_ms": [
+        [
+          2.1912333999999998,
+          2.2277375,
+          2.2081709000000003,
+          2.1924292000000003,
+          2.2253499999999997,
+          2.2444667000000003,
+          2.2471792,
+          2.2203708,
+          2.2510041000000003,
+          2.1843292
+        ],
+        [
+          1.2262709,
+          1.187825,
+          1.2230125,
+          1.2740458,
+          1.221225,
+          1.2065083,
+          1.2242083000000001,
+          1.2116292,
+          1.2156833,
+          1.2270875
+        ]
+      ]
+    },
+    {
+      "points": 20000,
+      "sensors": 2,
+      "dynamic_ms": 4.457292,
+      "typed_ms": 2.427537,
+      "samples_ms": [
+        [
+          4.520225,
+          4.4668166000000005,
+          4.3724083,
+          4.3875083,
+          4.4627,
+          4.3286333,
+          4.391125,
+          4.4518833,
+          4.5009541,
+          4.8602458
+        ],
+        [
+          2.4813207999999998,
+          2.4966375,
+          2.2579208,
+          2.3222917,
+          2.3626708,
+          2.4300333,
+          2.3895375,
+          2.4250416,
+          2.4733583,
+          2.4456124999999997
+        ]
+      ]
+    }
+  ]
+}

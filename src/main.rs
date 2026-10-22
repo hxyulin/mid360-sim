@@ -3,10 +3,13 @@
 //! Standalone moving-sensor room demo; no rm-simulator dependency.
 use anyhow::{Result, ensure};
 use clap::{Parser, ValueEnum};
+#[cfg(not(feature = "ros2-typed"))]
+use mid360_sim::publisher::LivoxPublisher;
+#[cfg(feature = "ros2-typed")]
+use mid360_sim::publisher::TypedLivoxPublisher as LivoxPublisher;
 use mid360_sim::{
     LivoxConfig, LivoxPacket,
     pattern::ScanPattern,
-    publisher::LivoxPublisher,
     sensor::{Effects, RollingFrame, Scene, Sensor, SurfaceHit},
 };
 use rclrs::CreateBasicExecutor;

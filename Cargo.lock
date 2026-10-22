@@ -602,6 +602,7 @@ dependencies = [
  "anyhow",
  "clap",
  "rclrs",
+ "ros-env",
 ]
 
 [[package]]
