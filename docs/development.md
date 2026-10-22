@@ -16,6 +16,14 @@ cargo deny --config deny.toml check
 python scripts/check-repository.py
 ```
 
+Deterministic adapter and articulated-scene regressions run in `cargo test`.
+For the offline material/edge audit and synthetic fixtures:
+
+```sh
+python3 -m unittest discover -s examples/calibration -v
+cargo run --release --locked --example packet_faults
+```
+
 The repository check compares bundled nominal model copies against Rust exports,
 checks distribution versions and verifies packaged licenses/notices. Keep source
 provenance when changing derived coefficients. Do not commit captures, CAD,

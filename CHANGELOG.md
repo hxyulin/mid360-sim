@@ -6,6 +6,10 @@
 
 ### Rust API
 
+- Add a dependency-free deterministic packet fault adapter with stable stream/
+  sequence decisions, explicit delivery time, bounded queues and separate injected/
+  capacity-loss counts. Preserve payloads and acquisition timestamps.
+
 - Add dependency-free physical transform and timed PointCloud2 encoders, plus
   optional rclrs static/dynamic TF and PointCloud2 publishers with selectable QoS.
 
@@ -17,6 +21,12 @@
   zero-noise directions. Validate edge occlusion and per-emission rotating mounts.
 
 ### Examples and validation
+
+- Add a runnable paired LiDAR/IMU packet delay/loss/reordering example and
+  moving mast/two-link scene regressions against independent triangle geometry.
+- Add a known-target material/edge measurement audit with checksummed emissions,
+  miss retention, disjoint training/validation sessions and a held-out range-bias
+  baseline. Keep synthetic fixtures explicit; no calibrated material model is added.
 
 - Add bounded transport benchmarks for separate native rclrs/rclpy processes and
   fresh external RM HTTP streams, with monotonic clock calibration, CPU/load and

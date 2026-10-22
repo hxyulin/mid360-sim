@@ -62,6 +62,8 @@ export default defineConfig({
         { text: 'Synchronized LiDAR / IMU', link: '/guide/synchronized-sensors' },
         { text: 'TF, clouds and LIO demo', link: '/guide/navigation-demo' },
         { text: 'Benchmark transport', link: '/guide/transport-benchmarks' },
+        { text: 'Inject packet faults', link: '/guide/packet-faults' },
+        { text: 'Validate materials / edges', link: '/guide/material-validation' },
       ] },
       { text: 'Release and contribute', items: [
         { text: 'Distribution', link: '/distribution' },

@@ -96,17 +96,23 @@ measurement contract at the boundary.
 
 Further work can extend realism without changing that scope:
 
-- **Articulated scenes:** broaden tests of moving links, mechanisms and mounted
-  extrinsics. Current synthetic/CAD rigid-scene checks do not establish full
-  robot fidelity; within-step moving-object motion remains approximate.
+- **Articulated scenes:** the [synthetic jointed-scene regression](guide/acquisition.md#articulated-scene-regression)
+  checks moving links, mounts and self-occlusion against independent triangles.
+  It does not establish native full-robot fidelity; within-step moving-object
+  motion remains approximate in the documented adapter modes.
 - **Materials and edges:** measure infrared reflectance, grazing/near-range
   behavior and beam footprint before adding calibrated intensity or mixed-return
-  policies. The existing diffuse dropout option is an uncalibrated stress model.
+  policies. The [known-target validation workflow](guide/material-validation.md)
+  audits complete emissions and held-out sessions; no suitable physical dataset
+  is currently available here. The existing diffuse dropout option remains an
+  uncalibrated stress model.
 - **Devices and operating conditions:** additional synchronized captures can
   separate temperature, device clocks and correlated noise. The 18.2-hour nominal
   cycle is a simulation choice, not measured hardware recurrence or future phase.
-- **Transport stress:** latency, jitter, packet loss and reordering can be added
-  by caller adapters without rewriting acquisition timestamps.
+- **Transport stress:** the [deterministic packet adapter](guide/packet-faults.md)
+  adds latency, jitter, whole-packet loss and reordering on an explicit delivery
+  timeline without rewriting acquisition timestamps. It is a synthetic test
+  policy, not a measured network model.
 
 Weather, multipath, interference and calibrated false returns are outside the
 current indoor-navigation approximation. Neither this package nor the original

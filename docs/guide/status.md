@@ -22,6 +22,8 @@ version does not imply that an older archive contains every current API.
 | MuJoCo and Gazebo scene queries | [MuJoCo](../install/mujoco.md), [Gazebo](../install/gazebo.md) | Use each backend's documented geometry and time policy |
 | Livox CustomMsg, timed PointCloud2, SI IMU and physical TF | [ROS installation](../install/ros2.md), [navigation demo](navigation-demo.md) | Optional rclrs publishers; callers supply IMU values, transforms and stamps |
 | Synchronized LiDAR/IMU examples and external RM consumption | [Synchronized sensors](synchronized-sensors.md) | Example-owned kinematics or the existing external world; no RM dependency |
+| Deterministic packet delay, jitter and loss | [Packet fault adapter](packet-faults.md) | Caller-owned delivery timeline and bounded queue; unchanged sensor payloads |
+| Known-target measurement auditing | [Material/edge workflow](material-validation.md) | Synthetic tooling checks until physical measurements are supplied; no calibrated material law |
 | Motion, downstream-consumer and transport checks | [Validation](validation.md), [transport benchmarks](transport-benchmarks.md) | Each report states its reference, workload and tested platform |
 
 Raw local points retain their emission times, including motion skew. Callers own
@@ -35,8 +37,9 @@ localization and recovery; see [connect a navigation stack](navigation.md).
 backend replays pass against their stated references. Dynamic rotations and
 explicit moving-geometry partitions are supported. These tests do not establish
 full articulated-robot fidelity; within-step moving-object motion remains
-approximate in the documented modes. Broader mechanism/self-occlusion regressions
-would extend coverage.
+approximate in the documented modes. The [articulated-scene regression](acquisition.md#articulated-scene-regression)
+checks a synthetic mast/two-link mechanism against an independent triangle
+reference; native full-robot validation remains broader work.
 
 **ROS and consumers:** native delivery and the runnable external LIO regression
 have been exercised on macOS arm64. The cross-platform lockfile does not establish
@@ -60,9 +63,10 @@ Material response, beam footprint, correlated noise and device/temperature
 variation need additional measurements before calibrated models can be claimed.
 Visual RGB is not 905 nm reflectance. See [realism and research scope](../realism.md).
 
-Optional extensions include deterministic packet delay/loss/reordering in caller
-adapters and broader articulated-scene tests. Neither requires changing the core
-sensor timestamps or introducing another dynamics world.
+The [packet fault adapter](packet-faults.md) now supplies deterministic delay,
+loss and reordering without changing acquisition. Calibrated material effects
+remain pending physical measurements; the [validation workflow](material-validation.md)
+defines the required evidence and held-out-session checks.
 
 ## Read the evidence for the question
 

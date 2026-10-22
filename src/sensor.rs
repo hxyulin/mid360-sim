@@ -527,3 +527,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "sensor/articulated_tests.rs"]
+mod articulated_tests;

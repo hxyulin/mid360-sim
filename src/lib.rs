@@ -13,6 +13,7 @@ mod nominal_data;
 pub mod pattern;
 pub mod pointcloud;
 pub mod sensor;
+pub mod transport;
 use sensor::{MAX_LIDAR_RAYS, RollingFrame};
 
 #[cfg(feature = "ros2")]

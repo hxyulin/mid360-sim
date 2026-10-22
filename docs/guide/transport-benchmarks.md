@@ -7,6 +7,10 @@ interfaces before choosing a new middleware. It starts only fresh test processes
 it does not attach to or control an existing match. Reports and logs are local
 artifacts, not publication. No Cargo dependency on RM is added.
 
+For repeatable synthetic delivery faults without ROS or an external host, use
+[the packet fault adapter](packet-faults.md). It is separate from these actual
+middleware measurements and preserves the original acquisition payloads.
+
 ## Native ROS
 
 After [ROS installation](../install/ros2.md):

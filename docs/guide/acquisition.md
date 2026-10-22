@@ -139,3 +139,23 @@ adapter intersections against an analytic scene. The
 plugin and RTX with their different time/profile assumptions. None establishes
 calibrated physical range accuracy. See [validation](validation.md) for the
 metric definitions and scope boundaries.
+
+## Articulated-scene regression
+
+Run `cargo test --locked sensor::articulated_tests` without a simulator, ROS or
+GPU. The caller-owned test scene prescribes chassis/head rotations, a mounting
+lever arm, an opaque mast and a shoulder/elbow mechanism. It adds no dynamics
+world or public robot model. Each emission queries the actual kinematic state.
+
+The adapter intersects inverse-transformed oriented boxes; its independent
+reference uses explicit matrix chains and forward-transformed triangles. Across
+8,000 emissions spanning changing joint poses, every link and the background are
+exercised and ideal ranges agree within the 1e-9 m numerical test tolerance.
+A frozen-geometry negative control differs on more than 100 emissions, preventing
+a passing test that accidentally freezes articulation. Separate tests retain
+bit-identical seeded noise/dropout under chunking and strides 3/7/31, and ensure
+a mounted surface below minimum range occludes the background at multiple poses.
+
+This is a regression for the scene-query contract and transform/time conventions.
+The tolerance is numerical agreement in synthetic geometry, not hardware range
+precision, native backend validation or full articulated-robot fidelity.
