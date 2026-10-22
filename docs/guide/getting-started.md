@@ -3,7 +3,8 @@
 # Getting started
 
 Choose the adapter that already has access to your scene. Each one shares the
-nominal scan law, but its acquisition and output capabilities differ.
+nominal scan law, but its acquisition and output capabilities differ. See
+[capabilities and status](status.md) for the overall scope and validation gaps.
 
 | Environment | Install guide | Motion within an acquisition batch | ROS output |
 |---|---|---|---|

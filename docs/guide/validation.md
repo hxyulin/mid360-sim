@@ -9,15 +9,10 @@ for simulator measurements; use the evidence below for the question you need ans
 
 ## Current scope
 
-Scan generation, the documented backend acquisition modes, explicit per-return
-timing and output interfaces are implemented. Motion tests pass against their
-stated references. This is feature completion within the current LiDAR scope,
-not a claim of hardware-equivalent returns or identical backend semantics.
-
-Robot dynamics and IMU synthesis belong to the caller; odometry, localization
-and recovery belong to the navigation stack. The downstream checks described
-in [use with a navigation stack](navigation.md) establish compatibility, not
-additional simulator features or improvements to an estimator.
+See [capabilities and status](status.md) for implemented interfaces, ownership
+boundaries and outstanding validation. This page explains which reference each
+accuracy claim uses; backend semantics and physical hardware precision are
+separate questions.
 
 ## What each accuracy number means
 

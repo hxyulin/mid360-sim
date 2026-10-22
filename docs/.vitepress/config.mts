@@ -31,18 +31,23 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: 'Guide', link: '/guide/getting-started' },
-      { text: 'Install', link: '/install/isaac-sim' },
+      { text: 'Install', items: [
+        { text: 'Rust', link: '/install/rust' },
+        { text: 'ROS 2 Jazzy', link: '/install/ros2' },
+        { text: 'Isaac Sim', link: '/install/isaac-sim' },
+        { text: 'MuJoCo', link: '/install/mujoco' },
+        { text: 'Gazebo Harmonic', link: '/install/gazebo' },
+      ] },
       { text: 'Validation', link: '/guide/validation' },
       { text: 'Releases', link: '/distribution' },
     ],
     sidebar: [
       { text: 'Start here', items: [
         { text: 'Choose your simulator', link: '/guide/getting-started' },
+        { text: 'Capabilities and status', link: '/guide/status' },
         { text: 'Acquisition and motion', link: '/guide/acquisition' },
         { text: 'Scan patterns', link: '/guide/patterns' },
         { text: 'Use with navigation', link: '/guide/navigation' },
-        { text: 'TF, clouds and LIO demo', link: '/guide/navigation-demo' },
-        { text: 'Benchmark transport', link: '/guide/transport-benchmarks' },
         { text: 'Validation and limits', link: '/guide/validation' },
       ] },
       { text: 'Install and integrate', items: [
@@ -55,6 +60,8 @@ export default defineConfig({
       { text: 'Worked examples', items: [
         { text: 'Scanned geometry → LiDAR', link: '/guide/scanned-geometry' },
         { text: 'Synchronized LiDAR / IMU', link: '/guide/synchronized-sensors' },
+        { text: 'TF, clouds and LIO demo', link: '/guide/navigation-demo' },
+        { text: 'Benchmark transport', link: '/guide/transport-benchmarks' },
       ] },
       { text: 'Release and contribute', items: [
         { text: 'Distribution', link: '/distribution' },

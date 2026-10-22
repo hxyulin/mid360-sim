@@ -56,6 +56,10 @@
 
 ### Documentation
 
+- Consolidate capabilities and validation gaps in one status guide, shorten the
+  navigation guide by moving historical results into its evidence report, and
+  distinguish completed external RM telemetry from remaining transport work.
+
 - Clarify completed LiDAR scope versus caller-owned IMU/navigation work, add a
   navigation integration guide and record downstream compatibility checks
   separately from sensor accuracy and backend performance.

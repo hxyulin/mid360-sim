@@ -100,3 +100,40 @@ previously observed native middleware defects in every configuration.
 Raw reports, truth/estimate trajectories and logs remain ignored under
 `local-assets/lio-integration-20261023/`. Use new output directories when
 reproducing; the harness refuses to overwrite prior results.
+
+## Historical ETH3D compatibility checks, 2026-10-22
+
+A 2026-10-22 experiment fed native MuJoCo rolling scans of the public
+[ETH3D Office mesh](guide/scanned-geometry.md) and caller-generated 200 Hz IMU through
+TriLIO's actual ROS publisher/node at 1× speed. It used a small ~3.2 m loop,
+a full turn, and peak angular rate ~2 rad/s in the fast case. All input packets
+and valid points reached the node, with no input queue drops.
+
+| Input | Duration | Corrected position RMSE | Maximum error |
+|---|---:|---:|---:|
+| Ideal, slow motion | 24 s | 8.1 mm | 19.6 mm |
+| Ideal, faster motion | 12 s | 8.4 mm | 19.6 mm |
+| Faster motion, synthetic noise/dropout | 12 s | 6.3 mm | 20.2 mm |
+
+Scoring uses starting-pose alignment only, without a whole-trajectory fit.
+Noise/dropout are uncalibrated stress choices; their smaller error in one run
+is not a general improvement claim. The live corrected stream ends one 25 ms
+window before recording end because the node waits for more input; IMU-rate
+output reaches the final sample. Configure `accel_scale=1.0` for these SI inputs;
+the node's Livox-in-g default initially prevented initialization.
+
+A separate offline consumer of the recorded ROS odometry deskewed noisy scans
+and matched them to a fixed original-survey PCD. It recovered both 0.30 m / 15°
+and 0.75 m / 30° starting errors through all 110 frames; 1.50 m / 90° and
+4 m / 180° starts failed throughout. This is local ICP recovery, not global
+relocalization. Global pose proposals, place recognition and recovery logic
+belong to the localization stack.
+
+These are compatibility results from a TriLIO development snapshot based on
+`57604a28450bcd62732fdcadde3ce93808b882ca` plus existing uncommitted changes,
+not a released integration or performance promise. The estimator and that historical
+end-to-end replay harness are not bundled here. The runnable regression evaluated
+earlier on this page uses a different estimator implementation and is scored
+separately. Reproducing the historical checks requires a compatible estimator
+and caller-owned IMU/ROS bridge. The source mesh example
+is reproducible separately using the [public workflow](guide/scanned-geometry.md).

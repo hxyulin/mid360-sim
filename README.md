@@ -66,13 +66,9 @@ The [validation guide](docs/guide/validation.md) distinguishes hardware-derived
 scan fits, controlled tests and motion-capture comparisons. The
 [runtime/accuracy report](docs/performance-tradeoffs.md) compares actual native
 backends, including the official plugin, with explicit measurement scopes.
-The current LiDAR scope is feature-complete: scan generation, scene acquisition,
-motion timing, return fields and the documented adapters are implemented. The
-caller supplies robot dynamics, IMU measurements and navigation algorithms; see
-[use with a navigation stack](docs/guide/navigation.md). Calibrated material
-response and full articulated-robot validation are optional extensions, not
-claims of the current model. Guides track the current source; check a release
-archive's source revision before relying on newer APIs.
+See [capabilities and status](docs/guide/status.md) for supported interfaces,
+caller responsibilities and remaining validation. Guides track the current
+source; check a release archive's source revision before relying on newer APIs.
 
 ## Development
 

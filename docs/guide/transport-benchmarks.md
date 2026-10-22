@@ -108,12 +108,34 @@ The metadata check inspects counts, epoch, sequence, all IMU times and three
 retained emission indices/times; it does not add a full per-point validation pass
 to this transport baseline.
 
-The host does not expose acquisition-complete, queue-drain or serializer timing.
-Consequently HTTP headers wait includes connection acceptance, host request wait,
-JSON serialization and scheduling; those parts cannot be separated by this test.
+This harness uses the ordinary RM attachment/poll endpoints. HTTP headers wait
+includes connection acceptance, host request wait, JSON serialization and
+scheduling; those parts cannot be separated by this test.
 Packet-end **simulation age** is reported separately and is not wall latency.
 Compare the native ROS and RM modes as different stage baselines, not as two
 transports receiving identical scenes/payloads. No estimator is included.
+
+### Optional stage profiling in RM
+
+The external [rm-simulator repository](https://github.com/trident-rm/rm-simulator)
+now has opt-in stage profiling in commit
+`a6ae7223ecfcdc617979c34af79b07348b044db1` (integration branch
+`feat/shared-angular-noise`). This is external source work, not a released
+requirement of this package. In a checkout containing that change, see
+`docs/sensor-transport-telemetry.md` and `scripts/benchmark-sensors.py`.
+
+That evaluator uses an existing live robot and can select
+`/api/sensors/attach-profiled` and `/api/sensors/poll-profiled`. It reports capture,
+worker ingest, input/output queue residence, owner wait and off-owner JSON
+encoding, with separate loss counters. It does not spawn or control the match;
+this repository's harness above instead starts an isolated fresh host. Keep
+these workflows and their artifacts distinct.
+
+Host durations remain separate from simulation stamps. Acquisition work can
+cross packet boundaries, so shared work batches must be deduplicated rather
+than treated as exact per-packet compute. Profiling adds overhead. See the
+[current follow-up status](../transport-evaluation.md#current-follow-up-status)
+for diagnostic findings and remaining controlled experiments.
 
 Reports contain client CPU (including warmup), approximate server CPU over the
 same live interval from `ps`, and response payload bytes/rate after warmup.

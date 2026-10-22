@@ -78,12 +78,11 @@ material options are implemented in that backend.
 
 ## Current scope and optional research
 
-The current LiDAR scope is feature-complete: compact scan generation, explicit
-acquisition times, scene queries and the documented simulator/output adapters.
-Native motion tests check each backend against its stated reference. Downstream
-LIO checks establish that generated moving measurements can be consumed by a
-real estimator; they are not improvements to that estimator or a new runtime
-integration. See [use with a navigation stack](guide/navigation.md).
+The [capability summary](guide/status.md) tracks implemented interfaces and
+validation gaps. Native motion tests use each backend's stated reference;
+downstream LIO checks establish consumption by an estimator. Neither establishes
+calibrated hardware returns. See [use with a navigation stack](guide/navigation.md)
+for the caller/consumer boundary.
 
 The caller owns robot dynamics, IMU synthesis, extrinsics and clocks. The
 navigation stack owns deskewing, state estimation, place recognition and recovery.

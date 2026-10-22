@@ -32,7 +32,9 @@ Multiple streams attach to the same robot in one world, with independent bounded
 workers. HTTP and native fixture results use different scenes/payloads; their
 latency numbers must not be treated as a transport-only A/B comparison.
 
-No production middleware, queue bounds, sensor stamps or RM source were changed.
+For the baseline measurements below, no production middleware, queue bounds,
+sensor stamps or RM source were changed. The later external telemetry work is
+recorded separately under [current follow-up status](#current-follow-up-status).
 Reports include source revision/dirty state and native binary hashes. The
 benchmark source is initially based on `fcbf715` plus this change; ignored local
 reports retain the individual raw samples and identities.
@@ -120,9 +122,10 @@ The longer HTTP references show why short no-loss runs are insufficient:
 
 Those drop counts matched sequence gaps, without additional input discontinuities
 in the long runs. This is consistent with completed-output queue pressure; the
-service does not expose separate timing/counters sufficient to assign every loss
-unambiguously. Background load rose during the longer matrix, so duration alone
-cannot be assigned as the cause of the difference from six-second tests.
+tested host revision did not expose separate timing/counters sufficient to assign
+every loss unambiguously. Background load rose during the longer matrix, so
+duration alone cannot be assigned as the cause of the difference from six-second
+tests.
 
 ## Binary is smaller; this prototype is not a faster decoder
 
@@ -164,7 +167,10 @@ this setup, not proof of a specific DDS defect, a cross-platform ranking or that
 switching discovery range fixes it. Both live DDS paths were tested only on macOS
 arm64. Cyclone uses an explicit loopback XML; Fast DDS uses its own configuration.
 
-## What to do next
+## Recommendations from the baseline {#what-to-do-next}
+
+These recommendations were made against the `b9d0a2c` host above. Their current
+implementation status follows separately; the original measurements are unchanged.
 
 1. Use the existing timed PointCloud2 path for Python consumers when their schema
    contract permits it. Keep CustomMsg for consumers that require it; measure the
@@ -185,3 +191,36 @@ final receiver/HTTP traces, codec samples, logs and source manifests remain igno
 under `local-assets/transport-20261023/`. No datasets, ROS runtime or generated
 interfaces were committed. Source revisions, binary hashes and load averages
 identify conditions; repeat before asserting production p99 or capacity bounds.
+
+## Current follow-up status
+
+External RM commit `a6ae7223ecfcdc617979c34af79b07348b044db1` on integration
+branch `feat/shared-angular-noise` implements the opt-in stage telemetry proposed
+above. It retains ordinary endpoints and sensor stamps, and adds capture/ingest
+work, input/output queue residence, owner-request wait, native JSON encoding and
+separate stage loss counters. It is external source work, not a new dependency
+or a published feature of mid360-sim. See the
+[profiling workflow](guide/transport-benchmarks.md#optional-stage-profiling-in-rm).
+
+Its separate six-trial CAD evaluation used Apple M5 Max / macOS arm64, an
+optimized debug host and a **Python 3.9.6** consumer, at ambient one-minute load
+averages around 18–24. The full-density single-stream profiled run recorded three
+rejected input capture brackets, zero ingest errors and zero output drops.
+The stride-3 and moving-gimbal runs had no stage losses. Four full-density
+attachments produced six completed-output drops without input/ingest losses;
+a deliberate 600 ms consumer stall produced four output drops. The default loss
+policy correctly rejected the lossy single-stream runs; intentional pressure
+trials allowed drops while recording them.
+
+Those observations establish useful stage attribution, not a loss fix or a
+controlled comparison with the Python 3.12 baseline above. Work-window timings
+are not exact per-packet costs, and background load prevents an overhead or
+capacity claim. Full source/binary/asset identities and attribution limits are
+recorded in RM's `docs/sensor-transport-telemetry.md`; raw metadata remains local
+to that evaluation checkout.
+
+Remaining follow-ups are to measure the actual native consumer under sustained,
+controlled load, validate Linux DDS runtime, and then A/B-test connection handling
+or typed codecs if the measured bottleneck warrants it. The Python binary
+prototype above remains an experiment; no replacement middleware has been
+implemented or justified by these results.
