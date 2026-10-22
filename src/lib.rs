@@ -3,6 +3,17 @@
 //! Standalone deterministic fitted MID-360 patterns and scene-query acquisitions.
 //! The optional `ros2` feature enables rclrs and requires a sourced ROS installation.
 //! Measured points remain in each emission's sensor frame; no world truth pose is sent.
+//!
+//! Start with [`sensor::Scene`] and [`sensor::Sensor`] to query an existing physics
+//! world. Use [`hardware::NominalPattern`] directly when your backend already owns
+//! acquisition. Convert completed acquisitions with [`LivoxPacket::from_scan`],
+//! then optionally encode [`pointcloud`] records or publish through `ros2`.
+//!
+//! The caller owns simulation time, scene geometry and pose interpolation. The
+//! library does not advance physics or deskew returns. Noise is keyed by global
+//! emission index; preserve indices, epochs and seeds across packet boundaries.
+//! Nominal patterns and optional effects are simulation approximations, not
+//! calibrated predictions of a device's future phase or material response.
 mod coefficients;
 pub mod effects;
 pub mod frames;
@@ -98,6 +109,25 @@ impl LivoxPacket {
     /// remain valid empty point packets with a timestamp; zero-emission frames
     /// are errors because they have no acquisition time. Reject malformed points,
     /// nonmonotonic indices/times, unbounded buffers and offsets above uint32.
+    /// Coordinates are narrowed to `f32` metres; frame consistency and agreement
+    /// between range and XYZ remain the caller's responsibility.
+    ///
+    /// ```
+    /// use mid360_sim::{LivoxConfig, LivoxPacket};
+    /// use mid360_sim::sensor::{RollingFrame, TimedReturn};
+    /// let scan = RollingFrame { points: vec![
+    ///     TimedReturn { sample_index: 7, time_ns: 100_000,
+    ///         range_m: None, point_sensor_m: None },
+    ///     TimedReturn { sample_index: 10, time_ns: 115_000,
+    ///         range_m: Some(2.), point_sensor_m: Some([2., 0., 0.]) },
+    /// ] };
+    /// let packet = LivoxPacket::from_scan(&scan, &LivoxConfig::default())?;
+    /// assert_eq!(packet.timebase_ns, 100_000); // the first emission missed
+    /// assert_eq!(packet.points.len(), 1);
+    /// assert_eq!(packet.points[0].offset_time_ns, 15_000);
+    /// assert_eq!(packet.points[0].line, 2); // global index 10 modulo 4
+    /// # Ok::<(), &'static str>(())
+    /// ```
     pub fn from_scan(scan: &RollingFrame, config: &LivoxConfig) -> Result<Self, &'static str> {
         if config.frame_id.is_empty() || config.frame_id.contains('\0') {
             return Err("invalid LiDAR frame ID");

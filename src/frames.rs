@@ -3,6 +3,28 @@
 //! Caller-owned physical transforms. No world pose, interpolation or clock is inferred.
 
 /// Rigid child-to-parent transform: `p_parent = R * p_child + translation_m`.
+///
+/// Validate caller-provided values before applying them. Operations do not
+/// normalize quaternions or validate implicitly. Directions use [`Self::rotate`]
+/// so the sensor lever arm is not added to a ray.
+///
+/// ```
+/// use mid360_sim::frames::Transform;
+/// let half = std::f64::consts::FRAC_1_SQRT_2;
+/// let mount = Transform {
+///     translation_m: [1., 0., 0.],
+///     rotation_xyzw: [0., 0., half, half], // 90 degrees about parent z
+/// };
+/// mount.validate()?;
+/// let ray_parent = mount.rotate([1., 0., 0.]);
+/// let point_parent = mount.point([2., 0., 0.]);
+/// assert!(ray_parent[0].abs() < 1e-12 && (ray_parent[1] - 1.).abs() < 1e-12);
+/// assert!((point_parent[0] - 1.).abs() < 1e-12);
+/// assert!((point_parent[1] - 2.).abs() < 1e-12);
+/// let recovered = mount.inverse().point(point_parent);
+/// assert!(recovered.iter().zip([2., 0., 0.]).all(|(a, b)| (a - b).abs() < 1e-12));
+/// # Ok::<(), &'static str>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Transform {
     /// Child origin in parent FLU coordinates, metres.
@@ -45,11 +67,13 @@ impl Transform {
         std::array::from_fn(|i| v[i] + w * t[i] + c[i])
     }
     /// Transform a child point in metres to the parent frame in metres.
+    /// Validate the transform first; this operation does not check its inputs.
     pub fn point(&self, v: [f64; 3]) -> [f64; 3] {
         let p = self.rotate(v);
         std::array::from_fn(|i| p[i] + self.translation_m[i])
     }
     /// Return the parent-to-child transform, with translation in metres.
+    /// Requires a validated unit quaternion; does not normalize it.
     pub fn inverse(&self) -> Self {
         let [x, y, z, w] = self.rotation_xyzw;
         let mut out = Self {

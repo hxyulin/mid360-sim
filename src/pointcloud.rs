@@ -17,7 +17,26 @@ pub const FIELDS: [(&str, u32, u8); 7] = [
     ("line", 18, 2),
 ];
 /// Encode the valid returns of a checked Livox packet as little-endian records.
-/// Omits misses without closing time gaps. Rejects mutated malformed payloads.
+/// Omits misses without closing time gaps. Rejects nonfinite XYZ, nonincreasing
+/// point offsets and point counts above [`crate::sensor::MAX_LIDAR_RAYS`].
+/// Start with [`LivoxPacket::from_scan`]: this encoder does not revalidate packet
+/// headers, tags or lane policy after public fields have been mutated.
+///
+/// ```
+/// use mid360_sim::{LivoxConfig, LivoxPacket, pointcloud};
+/// use mid360_sim::sensor::{RollingFrame, TimedReturn};
+/// let scan = RollingFrame { points: vec![TimedReturn {
+///     sample_index: 3, time_ns: 1_000_000_000,
+///     range_m: Some(2.), point_sensor_m: Some([2., 0., 0.]),
+/// }] };
+/// let packet = LivoxPacket::from_scan(&scan, &LivoxConfig::default())?;
+/// let bytes = pointcloud::encode(&packet)?;
+/// assert_eq!(bytes.len(), pointcloud::POINT_STEP as usize);
+/// assert_eq!(f32::from_le_bytes(bytes[0..4].try_into().unwrap()), 2.);
+/// assert_eq!(u32::from_le_bytes(bytes[12..16].try_into().unwrap()), 0);
+/// assert_eq!(&bytes[16..20], &[100, 0x10, 3, 0]);
+/// # Ok::<(), &'static str>(())
+/// ```
 pub fn encode(packet: &LivoxPacket) -> Result<Vec<u8>, &'static str> {
     if packet.points.len() > crate::sensor::MAX_LIDAR_RAYS {
         return Err("point cloud exceeds allocation budget");

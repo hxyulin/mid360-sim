@@ -2,6 +2,40 @@
 // Copyright (c) 2026 hxyulin <hxyulin@proton.me>
 //! Backend-independent acquisitions. Scene queries receive each emission's time;
 //! the caller transforms rays and interpolates moving geometry at that time.
+//!
+//! A minimal backend can describe a spherical surface centred on the sensor.
+//! Real integrations evaluate the actual sensor pose and geometry at `time_ns`,
+//! including dynamic mount rotations, before returning the nearest hit.
+//!
+//! ```
+//! use mid360_sim::{LivoxConfig, LivoxPacket};
+//! use mid360_sim::sensor::{RollingFrame, Scene, Sensor, SurfaceHit};
+//!
+//! struct SphericalRoom;
+//! impl Scene for SphericalRoom {
+//!     fn nearest_hit(&self, _time_ns: u64, _direction: [f64; 3], max_range_m: f64)
+//!         -> Option<SurfaceHit>
+//!     {
+//!         (2. <= max_range_m).then_some(SurfaceHit {
+//!             distance_m: 2., incidence_cosine: 1., reflectance: 0.8,
+//!         })
+//!     }
+//! }
+//!
+//! let sensor = Sensor::new(0.1, 40., 1_000_000_000, Default::default())?;
+//! let mut frame = RollingFrame::default();
+//! sensor.sample_into(&SphericalRoom, 7, 3, 3, &mut frame)?;
+//! assert_eq!(frame.points.iter().map(|p| p.time_ns).collect::<Vec<_>>(),
+//!            [1_000_035_000, 1_000_050_000, 1_000_065_000]);
+//! let packet = LivoxPacket::from_scan(&frame, &LivoxConfig::default())?;
+//! assert_eq!(packet.points[2].offset_time_ns, 30_000);
+//!
+//! // Reuse the buffer; continue global indices rather than restarting at zero.
+//! sensor.sample_into(&SphericalRoom, 16, 2, 3, &mut frame)?;
+//! assert_eq!(frame.points.len(), 2);
+//! assert_eq!(frame.points[0].sample_index, 16);
+//! # Ok::<(), &'static str>(())
+//! ```
 use crate::{
     effects::{AngularNoise, normal, uniform},
     pattern::{POINT_INTERVAL_NS, ScanPattern},
@@ -23,6 +57,9 @@ pub trait Scene {
     /// Return the nearest surface, including surfaces below minimum range.
     /// `direction` is a unit vector in sensor FLU at `time_ns`; transform it and
     /// the sensor origin into your scene using that emission's actual pose.
+    /// `time_ns` is absolute simulation nanoseconds; `max_range_m` is metres.
+    /// Return `None` for a miss or backend failure. Do not skip a near, dark or
+    /// otherwise undetectable first surface to return an object behind it.
     fn nearest_hit(
         &self,
         time_ns: u64,
@@ -87,7 +124,14 @@ pub struct Sensor {
     angular_noise: AngularNoise,
 }
 impl Sensor {
-    /// Construct an explicit-clock sensor. All effects default to ideal/noiseless.
+    /// Construct an explicit-clock sensor with range limits in metres.
+    /// `epoch_ns` is the simulation timestamp of global emission index zero.
+    /// [`Effects::default`] disables noise, bias and dropout.
+    ///
+    /// # Errors
+    /// Returns an error for nonfinite or unordered range limits, negative noise
+    /// standard deviations, angular sigma above pi radians, or dropout outside
+    /// `[0, 1]`. The minimum range may be zero; measured returns must be positive.
     ///
     /// ```
     /// let sensor = mid360_sim::sensor::Sensor::new(0.1, 40., 0, Default::default())?;
@@ -126,6 +170,15 @@ impl Sensor {
     /// Overflow and allocation limits are checked before changing `out`.
     /// Backend failures/invalid surfaces are misses; a rejected nearest surface
     /// never exposes a farther one. Odd strides retain all four fitted lanes.
+    ///
+    /// `count` counts retained emissions, including misses, rather than hits.
+    /// Each timestamp is `epoch_ns + (first + i * stride) * 5_000` nanoseconds;
+    /// decimation retains time gaps. Success replaces `out.points` while reusing
+    /// its allocation. Points stay in their individual acquisition frames.
+    ///
+    /// # Errors
+    /// Returns an error without modifying `out` if `count` is zero or exceeds
+    /// [`MAX_LIDAR_RAYS`], `stride` is zero, or an index/timestamp overflows.
     pub fn sample_into(
         &self,
         scene: &impl Scene,

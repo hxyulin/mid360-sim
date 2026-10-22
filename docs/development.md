@@ -12,12 +12,17 @@ ordinary Rust checks do not require ROS, a GPU or another simulator.
 cargo fmt --all -- --check
 cargo test --locked
 cargo clippy --all-targets --locked -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked
 cargo deny --config deny.toml check
 python scripts/check-repository.py
 python scripts/test-model-checks.py
 ```
 
 Deterministic adapter and articulated-scene regressions run in `cargo test`.
+The same command runs public API doctests; `cargo test --doc --locked` runs
+only those examples. Keep examples executable, with assertions for timing,
+frames or validation behavior rather than construction alone. Public items
+must have documentation, including units; rustdoc warnings should stay clean.
 For the offline material/edge audit and synthetic fixtures:
 
 ```sh

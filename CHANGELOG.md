@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- Expand Rust API guidance with runnable scene acquisition, packet timing,
+  transform, batch direction, capture-bound and PointCloud2 examples; clarify
+  validation, coordinate units and reusable acquisition buffer semantics.
+
 - Add reproducible nominal-scan, motion, runtime and ROS delivery figures, a
   visual results guide and a concise README evidence table with scoped claims,
   plotted source data and checksummed asset provenance.

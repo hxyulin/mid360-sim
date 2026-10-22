@@ -101,6 +101,17 @@ impl NominalPattern {
     /// at strides one and two; evaluate only retained lanes for larger strides.
     /// Reject zero stride or index overflow before modifying the output slice.
     /// Empty output is allowed. Results match scalar evaluation bit for bit.
+    /// Vectors are dimensionless unit directions in sensor FLU coordinates.
+    ///
+    /// ```
+    /// use mid360_sim::hardware::NominalPattern;
+    /// let mut rays = [[0.; 3]; 8];
+    /// NominalPattern.fill_directions(7, 3, &mut rays)?;
+    /// for (i, ray) in rays.iter().enumerate() {
+    ///     assert_eq!(*ray, NominalPattern.direction(7 + i as u64 * 3));
+    /// }
+    /// # Ok::<(), &'static str>(())
+    /// ```
     pub fn fill_directions(
         &self,
         first: u64,
@@ -183,6 +194,12 @@ impl HardwareCapturePattern {
     /// Missing calibration knots are interpolated in time; outside the first/last
     /// knot the residual correction is held constant within the recording only.
     /// Table/gravity tilt is deliberately left to the scene's sensor mounting pose.
+    ///
+    /// ```
+    /// use mid360_sim::hardware::{HardwareCapturePattern, LAST_CAPTURE_SAMPLE};
+    /// assert!(HardwareCapturePattern.direction(LAST_CAPTURE_SAMPLE).is_some());
+    /// assert!(HardwareCapturePattern.direction(LAST_CAPTURE_SAMPLE + 1).is_none());
+    /// ```
     pub fn direction(&self, sample_index: u64) -> Option<[f64; 3]> {
         if sample_index > LAST_CAPTURE_SAMPLE {
             return None;
