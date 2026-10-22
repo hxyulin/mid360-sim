@@ -106,6 +106,7 @@ pub(crate) struct DirectionCursor {
     capture: Option<crate::hardware::CaptureCursor>,
 }
 impl DirectionCursor {
+    #[inline]
     pub(crate) fn new(pattern: ScanPattern, first: u64, stride: u32) -> Self {
         Self {
             pattern,
@@ -117,6 +118,7 @@ impl DirectionCursor {
         }
     }
 
+    #[inline]
     pub(crate) fn direction(&mut self, index: u64) -> [f64; 3] {
         if !self.dense {
             return match &mut self.capture {
