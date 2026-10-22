@@ -162,3 +162,6 @@ See [recorded results](../navigation-evaluation.md) for tested platforms, source
 identities, timing and accuracy limits. These short integration checks do not
 establish Nav2 behavior, global localization, calibrated IMU effects, or Linux
 DDS runtime behavior.
+
+The [transport benchmark](transport-benchmarks.md) separates native publisher
+and HTTP/JSON costs without changing acquisition timestamps.

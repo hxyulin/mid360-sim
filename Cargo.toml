@@ -29,3 +29,8 @@ missing_docs = "deny"
 name = "mid360-sim"
 path = "src/main.rs"
 required-features = ["ros2"]
+
+[[example]]
+name = "transport"
+path = "examples/transport.rs"
+required-features = ["ros2"]

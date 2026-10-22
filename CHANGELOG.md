@@ -18,6 +18,10 @@
 
 ### Examples and validation
 
+- Add bounded transport benchmarks for separate native rclrs/rclpy processes and
+  fresh external RM HTTP streams, with monotonic clock calibration, CPU/load and
+  loss reports, plus a lossless binary-codec experiment on real measured bundles.
+
 - Add rotating physical TF and identical timed PointCloud2 to the synchronized
   fixture, plus an optional external TriLIO ROS regression on the fixture and
   a fresh RM CAD host, with separate truth scoring and process watchdogs.
