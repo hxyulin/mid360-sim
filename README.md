@@ -8,7 +8,8 @@ A rolling MID-360 LiDAR approximation for robotics simulators.
 [Installation](docs/guide/getting-started.md) ·
 [Validation](docs/guide/validation.md) · [Changelog](CHANGELOG.md)
 
-Worked example: [turn public laser scans into a simulated LiDAR scene](docs/guide/scanned-geometry.md).
+Worked examples: [public scans into simulated LiDAR](docs/guide/scanned-geometry.md) ·
+[synchronized LiDAR/IMU and a live RM host](docs/guide/synchronized-sensors.md).
 
 Generate a compact, nonrepeating scan, query your simulator's scene, and keep
 each return's acquisition time. The default model emits 200,000 rays/s across
@@ -18,7 +19,7 @@ approximation, not a calibrated Livox hardware emulator.
 | Use it with | Integration | Output |
 |---|---|---|
 | Your Rust simulator | [Dependency-free core](docs/install/rust.md) | Local points, ranges and timestamps |
-| ROS 2 Jazzy | [rclrs + Pixi/RoboStack](docs/install/ros2.md) | Livox Driver 2 CustomMsg and /clock |
+| ROS 2 Jazzy | [rclrs + Pixi/RoboStack](docs/install/ros2.md) | Livox CustomMsg, caller IMU and /clock |
 | Isaac Sim | [Warp GPU extension](docs/install/isaac-sim.md) | Optical mesh queries and Livox fields |
 | MuJoCo | [Python adapter](docs/install/mujoco.md) | Native CPU rays and Livox fields |
 | Gazebo Harmonic | [C++ system plugin](docs/install/gazebo.md) | Native PointCloudPacked |

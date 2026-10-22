@@ -28,6 +28,10 @@ adding that estimator or a second dynamics world to this package.
    their timestamps. Longer output intervals add consumer latency even when
    acquisition is accurate. Check the estimator's accepted frame rate and QoS.
 
+The [synchronized sensor examples](synchronized-sensors.md) demonstrate a
+caller-supplied kinematic IMU and consumption of an actual RM host stream,
+including rotating mounts and bounded transport. The core does not synthesize IMU.
+
 Use [ROS 2 Jazzy](../install/ros2.md) for the optional `CustomMsg` publisher.
 The MuJoCo and Isaac adapters return Livox-shaped fields for a caller-owned
 bridge; they do not automatically publish ROS messages or TF. Gazebo publishes

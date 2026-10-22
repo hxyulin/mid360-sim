@@ -52,6 +52,7 @@ export default defineConfig({
       ] },
       { text: 'Worked examples', items: [
         { text: 'Scanned geometry → LiDAR', link: '/guide/scanned-geometry' },
+        { text: 'Synchronized LiDAR / IMU', link: '/guide/synchronized-sensors' },
       ] },
       { text: 'Release and contribute', items: [
         { text: 'Distribution', link: '/distribution' },
@@ -65,6 +66,7 @@ export default defineConfig({
         { text: 'Hardware fit', link: '/hardware-fit' },
         { text: 'Independent captures', link: '/external-captures' },
         { text: 'Controlled motion', link: '/motion-distortion' },
+        { text: 'Synchronized sensor evaluation', link: '/synchronized-evaluation' },
         { text: 'Motion ground truth', link: '/motion-ground-truth' },
         { text: 'Recorded-motion results', link: '/motion-comparison-results' },
         { text: 'Backend MoCap replay', link: '/backend-ground-truth' },

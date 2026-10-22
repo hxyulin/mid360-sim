@@ -87,6 +87,11 @@ integration. See [use with a navigation stack](guide/navigation.md).
 
 The caller owns robot dynamics, IMU synthesis, extrinsics and clocks. The
 navigation stack owns deskewing, state estimation, place recognition and recovery.
+The [synchronized examples](guide/synchronized-sensors.md) demonstrate this
+boundary with an analytic fixture and an external RM host. Their IMU trajectory
+is caller-owned example code; the core provides only an inertial value contract
+and optional SI ROS publishing.
+
 Keep estimator changes in the navigation project and use this package's
 measurement contract at the boundary.
 

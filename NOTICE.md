@@ -86,3 +86,13 @@ products retain their own licenses. Generated tiny model files contain the same
 derived nominal optical parameters and explicit simulation clocks as the Rust
 core. Original measurements retain their ownership. Docker recipes install
 Gazebo packages only into an opt-in development container.
+
+## Synchronized sensor examples
+
+The optional `ImuPublisher`, smoke-test lifecycle handling and Cyclone loopback
+profile were adapted from rm-simulator revision
+`c3784e168cf21167f15c8728ba8e8edb8d1d80a9` (MIT OR Apache-2.0,
+Copyright (c) 2026 hxyulin <hxyulin@proton.me>). The examples contain original
+MIT OR Apache-2.0 kinematic fixture and protocol-consumer code. No RM physics
+implementation, CAD package or runtime is bundled, and no reverse dependency is
+added. Caller-provided IMU values do not establish calibrated device behavior.

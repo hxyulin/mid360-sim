@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MIT OR Apache-2.0 -->
+<!-- Copyright (c) 2026 hxyulin <hxyulin@proton.me> -->
+<!-- Local processes only. Explicit peers need predictable participant ports. -->
+<CycloneDDS>
+  <Domain Id="any">
+    <General>
+      <Interfaces><NetworkInterface address="127.0.0.1"/></Interfaces>
+      <AllowMulticast>false</AllowMulticast>
+    </General>
+    <Discovery>
+      <ParticipantIndex>auto</ParticipantIndex>
+      <Peers><Peer Address="127.0.0.1"/></Peers>
+    </Discovery>
+  </Domain>
+</CycloneDDS>

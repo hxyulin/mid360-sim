@@ -6,9 +6,21 @@
 
 ### Rust API
 
+- Add the dependency-free caller-provided `imu::ImuSample` SI contract and optional
+  rclrs `ImuPublisher`; never synthesize orientation or IMU motion in the core.
+
 - Expose `effects::AngularNoise` for caller-owned raycasting backends. Reuse
   the same model in `Sensor`, preserving existing seeded measurements and
   zero-noise directions. Validate edge occlusion and per-emission rotating mounts.
+
+### Examples and validation
+
+- Add a self-contained synchronized LiDAR/IMU kinematic example with rotating
+  mounts, independent lever-arm checks and native ROS delivery validation.
+- Add a dependency-free live RM HTTP consumer and isolated CAD evaluation for
+  clock alignment, gimbal carriers, pause/resume, topology changes and overload.
+- Bound ROS smoke-test teardown, defer dense point validation until reception
+  completes, and allow explicit middleware/discovery selection and loopback DDS.
 
 ### Performance
 

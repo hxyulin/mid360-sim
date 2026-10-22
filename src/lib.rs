@@ -7,6 +7,7 @@ mod coefficients;
 pub mod effects;
 pub mod hardware;
 mod hardware_data;
+pub mod imu;
 mod nominal_data;
 pub mod pattern;
 pub mod sensor;

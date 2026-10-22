@@ -32,7 +32,10 @@ relative to that time; valid points are sensor-local at their own acquisition.
 The demo defaults to 200,000 emissions/s, 10 Hz publication, 2 cm generic range
 noise and 1% independent dropout. These are simulation choices, not calibrated
 hardware parameters. `line = index % 4`, `tag = 0x10` and reflectivity 100 are
-explicit synthetic policies. The demo does not publish IMU, odometry or TF.
+explicit synthetic policies. The ordinary room demo does not publish IMU,
+odometry or TF. The separate
+[synchronized example](../guide/synchronized-sensors.md) demonstrates
+caller-provided IMU measurements and optional native ROS publication.
 For LIO, provide coherent IMU measurements from your simulator and configure
 the consumer's acceleration units explicitly; see
 [use with a navigation stack](../guide/navigation.md).
@@ -51,3 +54,15 @@ physics thread. DDS publication may block; use a bounded queue. Interface and
 runtime libraries must be sourced through `scripts/with-ros.sh` or an equivalent
 ROS environment. Release source includes the pinned interface definitions;
 there is no portable, ROS-free publisher executable.
+
+For local Cyclone DDS trials (the profile intentionally excludes remote hosts):
+
+```sh
+CYCLONEDDS_URI="file://$PWD/config/cyclonedds-loopback.xml" \
+  pixi run smoke --rmw rmw_cyclonedds_cpp --discovery-range SYSTEM_DEFAULT
+pixi run synchronized-smoke
+```
+
+The native smoke tests bound shutdown and validate dense packets after reception.
+Fast DDS remains the ordinary publisher default. See the synchronized guide and
+its evaluation for the observed automatic-interface failures on this Mac.

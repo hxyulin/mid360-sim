@@ -20,3 +20,6 @@ build = { cmd = "bash scripts/with-ros.sh cargo build --release --features ros2 
 run = { cmd = "bash scripts/with-ros.sh target/release/mid360-sim", depends-on = ["build"] }
 test = { cmd = "bash scripts/with-ros.sh cargo test --features ros2 --locked", depends-on = ["interfaces"] }
 smoke = { cmd = "bash scripts/with-ros.sh python scripts/smoke.py", depends-on = ["build"] }
+synchronized-build = { cmd = "bash scripts/with-ros.sh cargo build --release --features ros2 --example synchronized --locked", depends-on = ["interfaces"] }
+synchronized = { cmd = "bash scripts/with-ros.sh target/release/examples/synchronized --ros", depends-on = ["synchronized-build"] }
+synchronized-smoke = { cmd = "bash scripts/with-ros.sh python examples/synchronized/smoke.py", depends-on = ["synchronized-build"] }
