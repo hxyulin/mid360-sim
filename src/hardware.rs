@@ -40,6 +40,25 @@ impl HardwareOptics {
         let (se, ce) = elevation.sin_cos();
         Some([ce * ca, ce * sa, se])
     }
+    // Match the scalar phase reduction and each lane's accumulation order.
+    fn group_directions(spin_rad: f64, sweep_rad: f64) -> [[f64; 3]; 4] {
+        let spin = spin_rad.rem_euclid(std::f64::consts::TAU);
+        let sweep = sweep_rad.rem_euclid(std::f64::consts::TAU);
+        let mut angles = HARDWARE_COEFFICIENTS.map(|c| [spin + c[0][0], c[0][1]]);
+        for (i, &(j, k)) in TERMS.iter().enumerate() {
+            let (sin, cos) = (f64::from(j) * spin + f64::from(k) * sweep).sin_cos();
+            for (angle, c) in angles.iter_mut().zip(HARDWARE_COEFFICIENTS.iter()) {
+                for (axis, value) in angle.iter_mut().enumerate() {
+                    *value += c[1 + i][axis] * cos + c[1 + TERMS.len() + i][axis] * sin;
+                }
+            }
+        }
+        angles.map(|[a, e]| {
+            let (sa, ca) = a.sin_cos();
+            let (se, ce) = e.sin_cos();
+            [ce * ca, ce * sa, se]
+        })
+    }
 }
 /// Exact duration of the nominal clock's common cycle, seconds (about 18.2 h).
 /// Chosen for simulation coverage, not inferred as a physical motor recurrence.
@@ -172,6 +191,14 @@ impl NominalPattern {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HardwareMeanPattern;
 impl HardwareMeanPattern {
+    pub(crate) fn group_directions(&self, sample_index: u64) -> [[f64; 3]; 4] {
+        let time_s = (sample_index / 4) as f64 / 50_000.;
+        HardwareOptics::group_directions(
+            std::f64::consts::TAU * MEAN_SPIN_HZ * time_s + MEAN_SPIN_OFFSET_RAD,
+            std::f64::consts::TAU * MEAN_SWEEP_HZ * time_s + MEAN_SWEEP_OFFSET_RAD,
+        )
+    }
+
     /// Unit sensor FLU ray at a global emission index; four lanes share a 20 us
     /// carrier step. No artificial short-period wrapping is applied.
     pub fn direction(&self, sample_index: u64) -> [f64; 3] {
@@ -225,9 +252,92 @@ impl HardwareCapturePattern {
     }
 }
 
+// Local to one monotonically increasing acquisition; never shared across calls.
+pub(crate) struct CaptureCursor {
+    upper: usize,
+}
+impl CaptureCursor {
+    pub(crate) fn new(first: u64) -> Self {
+        let time_s = (first / 4) as f64 / 50_000.;
+        Self {
+            upper: CLOCK_KNOTS.partition_point(|k| k[0] <= time_s),
+        }
+    }
+
+    fn phases(&mut self, sample_index: u64) -> (f64, f64) {
+        debug_assert!(sample_index <= LAST_CAPTURE_SAMPLE);
+        let time_s = (sample_index / 4) as f64 / 50_000.;
+        debug_assert!(self.upper == 0 || CLOCK_KNOTS[self.upper - 1][0] <= time_s);
+        while self.upper < CLOCK_KNOTS.len() && CLOCK_KNOTS[self.upper][0] <= time_s {
+            self.upper += 1;
+        }
+        let upper = self.upper;
+        let correction = if upper == 0 {
+            [CLOCK_KNOTS[0][1], CLOCK_KNOTS[0][2]]
+        } else if upper == CLOCK_KNOTS.len() {
+            let k = CLOCK_KNOTS[upper - 1];
+            [k[1], k[2]]
+        } else {
+            let a = CLOCK_KNOTS[upper - 1];
+            let b = CLOCK_KNOTS[upper];
+            let blend = (time_s - a[0]) / (b[0] - a[0]);
+            [a[1] + blend * (b[1] - a[1]), a[2] + blend * (b[2] - a[2])]
+        };
+        (
+            std::f64::consts::TAU * SPIN_REFERENCE_HZ * time_s + correction[0],
+            std::f64::consts::TAU * SWEEP_REFERENCE_HZ * time_s + correction[1],
+        )
+    }
+
+    pub(crate) fn direction(&mut self, index: u64) -> [f64; 3] {
+        let (spin, sweep) = self.phases(index);
+        HardwareOptics
+            .direction((index % 4) as u8, spin, sweep)
+            .expect("validated capture index")
+    }
+
+    pub(crate) fn group_directions(&mut self, index: u64) -> [[f64; 3]; 4] {
+        let (spin, sweep) = self.phases(index);
+        HardwareOptics::group_directions(spin, sweep)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn capture_cursor_matches_scalar_at_knots_and_held_edges() {
+        // Exercise <= at every knot, including those between emission groups.
+        for knot in CLOCK_KNOTS {
+            let center = (knot[0] * 50_000.) as u64 * 4;
+            let first = center.saturating_sub(8);
+            let mut cursor = CaptureCursor::new(first);
+            for index in first..=(center + 8).min(LAST_CAPTURE_SAMPLE) {
+                assert_eq!(
+                    cursor.direction(index).map(f64::to_bits),
+                    HardwareCapturePattern
+                        .direction(index)
+                        .unwrap()
+                        .map(f64::to_bits)
+                );
+            }
+        }
+        for first in [0, LAST_CAPTURE_SAMPLE - 31] {
+            let mut cursor = CaptureCursor::new(first);
+            for index in first..=first + 31 {
+                let rays = cursor.group_directions(index);
+                assert_eq!(
+                    rays[(index % 4) as usize].map(f64::to_bits),
+                    HardwareCapturePattern
+                        .direction(index)
+                        .unwrap()
+                        .map(f64::to_bits)
+                );
+            }
+        }
+    }
+
     #[test]
     fn nominal_batch_matches_scalar_across_clock_wrap_and_chunks() {
         let p = NominalPattern;

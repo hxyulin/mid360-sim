@@ -211,7 +211,7 @@ impl Sensor {
         last.checked_mul(POINT_INTERVAL_NS)
             .and_then(|t| t.checked_add(self.epoch_ns))
             .ok_or("timestamp overflow")?;
-        if pattern.direction(first).is_none() || pattern.direction(last).is_none() {
+        if !pattern.supports(last) {
             return Err("acquisition exceeds scan profile duration");
         }
         // Choose the range-noise path once per acquisition so enabled noise
@@ -235,23 +235,12 @@ impl Sensor {
         out: &mut RollingFrame,
     ) {
         out.points.clear();
-        let mut nominal_group = None;
-        let mut nominal_rays = [[0.; 3]; 4];
+        let mut directions = crate::pattern::DirectionCursor::new(pattern, first, stride);
         for offset in 0..count {
             let index = first + u64::from(offset) * u64::from(stride);
             let time_ns = self.epoch_ns + index * POINT_INTERVAL_NS;
             let e = self.effects;
-            let d = match pattern {
-                ScanPattern::Nominal if stride <= 2 => {
-                    if nominal_group != Some(index / 4) {
-                        nominal_rays = crate::hardware::NominalPattern.group_directions(index);
-                        nominal_group = Some(index / 4);
-                    }
-                    nominal_rays[(index % 4) as usize]
-                }
-                ScanPattern::Nominal => crate::hardware::NominalPattern.direction(index),
-                _ => pattern.direction(index).expect("validated profile window"),
-            };
+            let d = directions.direction(index);
             let d = self.angular_noise.perturb_unit(index, d);
             let mut point = TimedReturn {
                 sample_index: index,
