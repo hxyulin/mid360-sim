@@ -238,6 +238,19 @@ def native_scan(mesh, transforms, tests, output):
     )
 
 
+def preview_rays(origin, width=1200, height=800):
+    """Render toward -X with world +Z at the top of the image."""
+    # Open3D 0.19's helper uses the image-down axis for this argument.
+    return o3d.t.geometry.RaycastingScene.create_rays_pinhole(
+        fov_deg=90,
+        center=origin + [-1.0, 0, 0],
+        eye=origin,
+        up=[0, 0, -1],
+        width_px=width,
+        height_px=height,
+    )
+
+
 def figures(scene, mesh, tests, output):
     """Write attributed geometry and miss-aware CDF figures, without source RGB."""
     import matplotlib
@@ -274,14 +287,7 @@ def figures(scene, mesh, tests, output):
     )
     plt.close(fig)
     origin = tests[0][2]
-    image = o3d.t.geometry.RaycastingScene.create_rays_pinhole(
-        fov_deg=90,
-        center=origin + [-1.0, 0, 0],
-        eye=origin,
-        up=[0, 0, 1],
-        width_px=1200,
-        height_px=800,
-    )
+    image = preview_rays(origin)
     hit = scene.cast_rays(image)
     depth = hit["t_hit"].numpy()
     normal = hit["primitive_normals"].numpy()

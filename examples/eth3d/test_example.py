@@ -18,6 +18,12 @@ spec.loader.exec_module(example)
 
 
 class ExampleTests(unittest.TestCase):
+    def test_preview_keeps_world_up_at_image_top(self):
+        rays = example.preview_rays(np.zeros(3), width=4, height=4).numpy()
+        self.assertGreater(rays[0, 2, 5], 0)
+        self.assertLess(rays[-1, 2, 5], 0)
+        self.assertGreater(rays[2, -1, 4], 0)
+
     def test_misses_are_penalized_in_agreement_not_conditional_errors(self):
         result = example.score(np.array([np.inf, -1, 2.01, 1.0]), np.full(4, 2.0))
         self.assertEqual(result["hit_fraction"], 0.5)
