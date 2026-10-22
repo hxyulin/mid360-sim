@@ -9,6 +9,19 @@ source CAD are not included. The RM source was committed as
 `c3784e168cf21167f15c8728ba8e8edb8d1d80a9`; its sensor stream used the actual
 live world, not a restored or separately advanced sensor world.
 
+The RM worktree was independently rebased during finalization. Its sensor commit
+became `b9d0a2c752dfc8d4f247349a2d01e89664b59484`, with unchanged synchronized
+assembler, worker and publisher sources. A fresh host binary built from that
+head passed the complete external evaluator again: no gaps or reported drops
+in the four main chassis/gimbal cases, the same 0.49623 rad/s achieved body spin
+and zero stabilized-gimbal spin, successful moving-head and pause/resume checks,
+one explicit topology-change sequence gap, two queued bundles / six dropped
+intervals under deliberate pressure, detach and expiry while paused. Maximum
+packet-end host-clock age was 31.25 ms and maximum HTTP poll wall time was
+30.64 ms across its four main cases. The detailed table below records the
+original run; these repeat measurements establish compatibility of the rebased
+source without treating different host scheduling as identical runtime evidence.
+
 ## Analytic fixture
 
 One simulated second per motion, nominal 200,000 emissions/s, 200 Hz IMU,

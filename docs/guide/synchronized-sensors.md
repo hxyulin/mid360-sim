@@ -96,8 +96,8 @@ configuration is a transport choice, not a change to acquisition timestamps.
 `examples/rm_sensors/live.py` uses Python's standard library to consume the
 read-only measured stream from an **already running** RM app/server. It does not
 create, reset, move or pause that match. RM must include synchronized attachments
-from revision `c3784e168cf21167f15c8728ba8e8edb8d1d80a9` or a compatible later
-version. This is an optional external process, not a Cargo dependency.
+from revision `b9d0a2c752dfc8d4f247349a2d01e89664b59484` or a compatible later
+version (the implementation was originally committed as `c3784e1` before rebasing). This is an optional external process, not a Cargo dependency.
 
 Enable the RM operator HTTP API, choose an existing chassis ID, then from this
 checkout:
