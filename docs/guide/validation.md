@@ -7,6 +7,18 @@ experiments. It is an empirical scan approximation, not a calibrated MID-360
 return emulator. Start with the [current runtime/accuracy comparison](../performance-tradeoffs.md)
 for simulator measurements; use the evidence below for the question you need answered.
 
+## Current scope
+
+Scan generation, the documented backend acquisition modes, explicit per-return
+timing and output interfaces are implemented. Motion tests pass against their
+stated references. This is feature completion within the current LiDAR scope,
+not a claim of hardware-equivalent returns or identical backend semantics.
+
+Robot dynamics and IMU synthesis belong to the caller; odometry, localization
+and recovery belong to the navigation stack. The downstream checks described
+in [use with a navigation stack](navigation.md) establish compatibility, not
+additional simulator features or improvements to an estimator.
+
 ## What each accuracy number means
 
 | Question | Evidence | Measured quantity | Limit |
@@ -46,7 +58,7 @@ These are documented acquisition-policy measurements, not equivalent full-app
 loads or hard real-time guarantees. Older [Isaac architecture probes](../isaac-performance.md)
 remain useful evidence, but are labeled separately from the current comparison.
 
-## What remains open
+## Scope boundaries and optional extensions
 
 Isaac includes tested explicit static/dynamic optical partitions and rigid
 transform histories. Those tests cover moving geometry and self-occlusion in
@@ -55,8 +67,13 @@ Within-step moving-object interpolation remains approximate. MuJoCo's optional
 rolling API interpolates the sensor, while geometry is current for the call;
 Gazebo holds sensor and geometry per physics step.
 
-Synchronized IMU output, time/extrinsic calibration, calibrated material returns,
-vibration and correlated noise remain open. Visual RGB is not 905 nm reflectance.
-Synthetic tags and reflectivity fields are transport fixtures, not measured
-material signals. Full dynamic robot scenes and publication/consumer latency
-need evaluation before extending the simple-room performance claim.
+The caller must supply synchronized IMU measurements and correct time/extrinsic
+calibration when using LIO; the LiDAR adapters do not synthesize those signals.
+Calibrated material returns, vibration and correlated noise are optional realism
+research. Visual RGB is not 905 nm reflectance. Synthetic tags and reflectivity
+fields are transport fixtures, not measured material signals.
+
+A native ROS TriLIO replay has checked downstream consumption of generated
+moving scans with caller-synthesized IMU. That small-room compatibility test
+does not extend the native backend throughput claims to full dynamic robot
+scenes or an integrated acquisition/transport/localization loop.

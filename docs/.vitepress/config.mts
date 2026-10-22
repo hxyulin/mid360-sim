@@ -40,6 +40,7 @@ export default defineConfig({
         { text: 'Choose your simulator', link: '/guide/getting-started' },
         { text: 'Acquisition and motion', link: '/guide/acquisition' },
         { text: 'Scan patterns', link: '/guide/patterns' },
+        { text: 'Use with navigation', link: '/guide/navigation' },
         { text: 'Validation and limits', link: '/guide/validation' },
       ] },
       { text: 'Install and integrate', items: [
@@ -59,7 +60,7 @@ export default defineConfig({
         { text: 'Provenance', link: '/provenance' },
       ] },
       { text: 'Evidence and research', collapsed: true, items: [
-        { text: 'Realism assessment', link: '/realism' },
+        { text: 'Realism and scope', link: '/realism' },
         { text: 'Hardware capture', link: '/hardware-validation' },
         { text: 'Hardware fit', link: '/hardware-fit' },
         { text: 'Independent captures', link: '/external-captures' },

@@ -10,6 +10,11 @@
 | MuJoCo | [Install the adapter](install/mujoco.md) | 3.7.0 on macOS arm64 |
 | Gazebo | [Build the plugin](install/gazebo.md) | Harmonic 8.15 + DART/Bullet on Linux |
 
+The current LiDAR scope is feature-complete for scan generation, motion-aware
+scene acquisition and the documented outputs. Your simulator owns dynamics and
+IMU measurements; your navigation stack owns deskewing and localization. See
+[use with a navigation stack](guide/navigation.md) for the integration contract.
+
 Read [validation and limitations](guide/validation.md) before treating any
 approximation as a hardware measurement. See [distribution](distribution.md)
 for artifact contents and platform requirements.

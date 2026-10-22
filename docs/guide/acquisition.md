@@ -105,4 +105,4 @@ adapter intersections against an analytic scene. The
 [runtime/accuracy comparison](../performance-tradeoffs.md) includes the official
 plugin and RTX with their different time/profile assumptions. None establishes
 calibrated physical range accuracy. See [validation](validation.md) for the
-metric definitions and remaining work.
+metric definitions and scope boundaries.

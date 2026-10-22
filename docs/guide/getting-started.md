@@ -33,6 +33,13 @@ physics-step snapshots improve with shorter steps. See the
 [acquisition contract](acquisition.md) and [measured tradeoffs](../performance-tradeoffs.md)
 before applying a fast static-scene configuration to a moving robot.
 
+## Connect navigation
+
+Publish raw local returns with their acquisition times; let the navigation stack
+deskew them. For LiDAR–inertial odometry, the caller also supplies IMU samples,
+clock alignment and mounting extrinsics. Start with
+[use with a navigation stack](navigation.md) before changing scan or physics rates.
+
 ## Source or release
 
 Install from a checkout while developing adapters. Use the checksummed

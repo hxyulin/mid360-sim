@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: MIT OR Apache-2.0 -->
 <!-- Copyright (c) 2026 hxyulin <hxyulin@proton.me> -->
-# Realism assessment and roadmap
+# Realism and scope
 
 ## What the public data establishes
 
@@ -74,38 +74,37 @@ material options are implemented in that backend.
   defaults off, and changes detection only; ROS reflectivity remains synthetic.
 - Checked packet timing, explicit misses, first-return tags and bounded buffers.
 
-## Highest-value next work
+## Current scope and optional research
 
-1. **Full moving-robot validation.** Live backends now exist. Isaac supports
-   optical meshes, explicit static/dynamic partitions and retained rigid-object
-   transforms, with synthetic and CAD-scene checks. Extend this to articulated
-   robot motion, mechanisms, coherent native poses and publication costs.
-   MuJoCo/Gazebo query native physics geometry; collision simplification can erase
-   optical detail. Keep one dynamics world and explicit acquisition histories.
-2. **IMU + synchronization.** Navigation pipelines such as LiDAR-inertial odometry
-   need timestamped gyro/accelerometer signals with noise, bias and drift, correct
-   extrinsics, gravity and clock relationships. Do not publish perfect poses as
-   sensor measurements. This matters more than adding more Fourier coefficients.
-3. **Calibrated materials.** Measure white/black surfaces, metal, grazing angles
-   and near-range detection before tuning response/intensity. Keep RGB separate
-   from 905 nm reflectance. Replace the opt-in heuristic with data, not guessed
-   hard cutoffs derived from two maximum-range specifications.
-4. **Beam/edge behaviour.** A small ray bundle can model partial hits/edge mixing,
-   at a multiplication of raycast cost. Validate the footprint and return-selection
-   policy against recordings before claiming MID-360 fidelity.
-5. **More devices and operating conditions.** The existing 300 s owner capture
-   and independent recordings already exceed the official table's four seconds.
-   More devices, temperatures and synchronized moving captures are needed to
-   separate clock drift, device variation, lane timing and return correlation.
-   The 18.2-hour nominal cycle remains a simulation choice, not a measured
-   hardware recurrence or a prediction of an individual device's future phase.
-6. **Transport effects.** Optional latency/jitter, loss and reordering belong in
-   publication/transport scheduling without changing acquisition timestamps.
+The current LiDAR scope is feature-complete: compact scan generation, explicit
+acquisition times, scene queries and the documented simulator/output adapters.
+Native motion tests check each backend against its stated reference. Downstream
+LIO checks establish that generated moving measurements can be consumed by a
+real estimator; they are not improvements to that estimator or a new runtime
+integration. See [use with a navigation stack](guide/navigation.md).
 
-Prioritize geometry + IMU + real recordings for navigation. Weather, multipath,
-interference and false alarms are lower priority for an indoor arena. Neither
-this package nor the original simulator currently provides these calibrated
-hardware effects.
+The caller owns robot dynamics, IMU synthesis, extrinsics and clocks. The
+navigation stack owns deskewing, state estimation, place recognition and recovery.
+Keep estimator changes in the navigation project and use this package's
+measurement contract at the boundary.
+
+Further work can extend realism without changing that scope:
+
+- **Articulated scenes:** broaden tests of moving links, mechanisms and mounted
+  extrinsics. Current synthetic/CAD rigid-scene checks do not establish full
+  robot fidelity; within-step moving-object motion remains approximate.
+- **Materials and edges:** measure infrared reflectance, grazing/near-range
+  behavior and beam footprint before adding calibrated intensity or mixed-return
+  policies. The existing diffuse dropout option is an uncalibrated stress model.
+- **Devices and operating conditions:** additional synchronized captures can
+  separate temperature, device clocks and correlated noise. The 18.2-hour nominal
+  cycle is a simulation choice, not measured hardware recurrence or future phase.
+- **Transport stress:** latency, jitter, packet loss and reordering can be added
+  by caller adapters without rewriting acquisition timestamps.
+
+Weather, multipath, interference and calibrated false returns are outside the
+current indoor-navigation approximation. Neither this package nor the original
+simulator establishes those hardware effects.
 
 See the [acquisition contract](guide/acquisition.md) for current backend modes,
 [validation guide](guide/validation.md) for accuracy definitions, and

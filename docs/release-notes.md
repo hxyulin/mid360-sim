@@ -23,8 +23,11 @@ and [artifact contents](https://hxyulin.github.io/mid360-sim/distribution.html).
 Verify downloads against SHA256SUMS. Registry publication is not part of this release.
 
 This is an empirical approximation, not a calibrated Livox emulator. Geometry
-motion differs by adapter; use short acquisition batches. IMU output, coherent
-per-emission moving self-geometry and calibrated material response remain open.
+motion differs by adapter; use the documented acquisition policy. The current
+LiDAR scope is feature-complete; dynamics and IMU synthesis remain caller-owned,
+and localization belongs to the navigation stack. Calibrated material response
+and broader articulated-robot validation are optional extensions. See
+[use with a navigation stack](guide/navigation.md) for downstream integration.
 Offline pose-policy tests and native simulator replay are separate evidence;
 the latter uses measured motion with exact synthetic geometry, not a calibrated
 hardware range reference. See [current runtime/accuracy results](performance-tradeoffs.md). See [validation](https://hxyulin.github.io/mid360-sim/guide/validation.html).

@@ -19,6 +19,10 @@
 
 ### Documentation
 
+- Clarify completed LiDAR scope versus caller-owned IMU/navigation work, add a
+  navigation integration guide and record downstream compatibility checks
+  separately from sensor accuracy and backend performance.
+
 - Add a reproducible public ETH3D Office → optical mesh → MuJoCo example,
   with held-out range/coverage results, attributed figures and explicit limits.
 - Refresh capability/validation guides for native official-plugin execution,

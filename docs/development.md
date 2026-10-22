@@ -28,7 +28,7 @@ pixi run test
 pixi run smoke
 pixi run smoke --stride 3
 pixi run bash scripts/with-ros.sh cargo clippy --features ros2 --all-targets --locked -- -D warnings
-python -m unittest discover -s integrations/python/tests -v
+PYTHONPATH=integrations/python python -m unittest discover -s integrations/python/tests -v
 ```
 
 Python adapter tests require its MuJoCo extra. The Isaac and Gazebo install
