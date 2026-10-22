@@ -34,8 +34,13 @@ Return the nearest opaque hit even if it is inside the minimum range, so it
 still occludes farther objects.
 
 `Sensor::sample_into` writes caller-owned rolling frames. Preserve the epoch,
-next emission index and seeded noise state across batches. See the runnable
+next emission index and seed configuration across batches. See the runnable
 examples in Rust API docs for `Sensor` and `NominalPattern`.
+
+If your backend already owns acquisition and range effects, use
+`effects::AngularNoise` independently. It perturbs a local unit direction before
+your scene query without consuming mutable RNG state. See
+[reusing angular effects](../guide/acquisition.md#reuse-angular-effects-in-a-backend).
 
 Generate local API documentation with `cargo doc --no-deps`. The core remains
 independent of all optional simulator adapters; it does not advance physics.

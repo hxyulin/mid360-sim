@@ -69,6 +69,8 @@ material options are implemented in that backend.
   applied BEFORE intersection. Noise therefore affects edge occlusion as well
   as reported XYZ. Zero by default; this is a generic emitted-ray model,
   not a model of measured encoder uncertainty or correlated hardware optics.
+  The reusable `effects::AngularNoise` module exposes the same model for
+  backends that already own acquisitions and their own range effects.
 - Backend-provided reflectance/incidence records. An optional diffuse dropout
   stress model uses their product as survival probability. It is not calibrated,
   defaults off, and changes detection only; ROS reflectivity remains synthetic.

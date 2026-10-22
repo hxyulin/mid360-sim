@@ -21,6 +21,39 @@ missed first emission. Python/Isaac `livox_fields()` exposes equivalent fields;
 Gazebo publishes its own native point schema. Simulator adapters do not
 implicitly start a ROS publisher.
 
+## Reuse angular effects in a backend
+
+`effects::AngularNoise` is independent of the scan generator and `Sensor`
+acquisition loop. A backend with its own time-aware geometry queries or range
+effects can use it directly:
+
+```rust
+use mid360_sim::{effects::AngularNoise, hardware::NominalPattern};
+
+let angular = AngularNoise::new(0.001, 7)?; // radians per tangent axis, device seed
+let index = 42; // global emission index, never a packet-local index
+let emitted = angular.perturb(index, NominalPattern.direction(index))?;
+```
+
+Transform `emitted` using the sensor's actual pose at this emission's time,
+including any dynamic carrier rotation and mounting offset. Query the nearest
+physical surface with that ray before range filtering and dropout. Report local
+XYZ as `emitted * measured_range`. Perturbing only the reported point after
+intersection would leave edge occlusion unchanged and is a different model.
+
+Construction validates the angular standard deviation; `perturb` validates a
+finite unit input and returns a normalized direction. Zero noise returns the
+input bits unchanged. The immutable seed and global emission index determine
+each perturbation, independently of call order, chunking, decimation and misses.
+This is the same angular model and random streams used by `Sensor`.
+
+The module does not own a simulation clock, scene history, pose interpolation or
+range/dropout policy. For example, rm-simulator can retain its existing mounted
+capture interpolation and range-noise streams while adopting this angular model.
+Its current dependency pin must include this API before using it. No hardware
+calibration, encoder uncertainty or finite beam footprint is implied by the
+chosen standard deviation; the default is zero.
+
 ## Choose how motion is represented
 
 | API / mode | Sensor pose | Optical geometry | Main tradeoff |

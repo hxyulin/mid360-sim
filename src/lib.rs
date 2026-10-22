@@ -4,6 +4,7 @@
 //! The optional `ros2` feature enables rclrs and requires a sourced ROS installation.
 //! Measured points remain in each emission's sensor frame; no truth pose is sent.
 mod coefficients;
+pub mod effects;
 pub mod hardware;
 mod hardware_data;
 mod nominal_data;
@@ -21,7 +22,7 @@ pub struct LivoxConfig {
     pub frame_id: String,
     /// Driver-compatible device number; use distinct IDs for multiple sensors.
     pub lidar_id: u8,
-    /// Placeholder reflectivity in [0,255], not a physical intensity measurement.
+    /// Placeholder reflectivity in `[0,255]`, not a physical intensity measurement.
     pub reflectivity: u8,
 }
 impl Default for LivoxConfig {

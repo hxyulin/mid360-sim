@@ -2,7 +2,10 @@
 // Copyright (c) 2026 hxyulin <hxyulin@proton.me>
 //! Backend-independent acquisitions. Scene queries receive each emission's time;
 //! the caller transforms rays and interpolates moving geometry at that time.
-use crate::pattern::{POINT_INTERVAL_NS, ScanPattern};
+use crate::{
+    effects::{AngularNoise, normal, uniform},
+    pattern::{POINT_INTERVAL_NS, ScanPattern},
+};
 /// Maximum emissions per acquisition (bounded caller allocation).
 pub const MAX_LIDAR_RAYS: usize = 262_144;
 /// Nearest physical surface; below-minimum hits still occlude farther objects.
@@ -10,9 +13,9 @@ pub const MAX_LIDAR_RAYS: usize = 262_144;
 pub struct SurfaceHit {
     /// Distance from the sensor origin in metres, finite and nonnegative.
     pub distance_m: f64,
-    /// Absolute normal/ray cosine in [0,1].
+    /// Absolute normal/ray cosine in `[0,1]`.
     pub incidence_cosine: f64,
-    /// Diffuse reflectance in [0,1], supplied by a sensor material, not RGB colour.
+    /// Diffuse reflectance in `[0,1]`, supplied by a sensor material, not RGB colour.
     pub reflectance: f64,
 }
 /// Geometry backend, independent of Rapier, Bevy, ROS and any robot simulator.
@@ -57,7 +60,7 @@ pub struct Effects {
     /// Independent tangent-plane angular standard deviation per axis, radians.
     /// Must be at most pi radians. Perturbs emitted rays before collision; not inferred optical fit error.
     pub angular_sigma_rad: f64,
-    /// Independent probability of dropping a valid return, [0,1].
+    /// Independent probability of dropping a valid return, `[0,1]`.
     pub dropout: f64,
     /// Optional qualitative diffuse response: survival probability is reflectance
     /// times incidence cosine. This is NOT a calibrated detection probability.
@@ -75,23 +78,13 @@ impl Default for Effects {
         }
     }
 }
-fn uniform(seed: u64, index: u64, stream: u64) -> f64 {
-    let mut x =
-        seed ^ index.wrapping_mul(0x9e3779b97f4a7c15) ^ stream.wrapping_mul(0xd1b54a32d192ed03);
-    x = (x ^ (x >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
-    x = (x ^ (x >> 27)).wrapping_mul(0x94d049bb133111eb);
-    (((x ^ (x >> 31)) >> 11) as f64 + 0.5) / 9007199254740992.
-}
-fn normal(seed: u64, index: u64, stream: u64) -> f64 {
-    (-2. * uniform(seed, index, stream).ln()).sqrt()
-        * (std::f64::consts::TAU * uniform(seed, index, stream + 1)).cos()
-}
 /// Validated immutable acquisition configuration.
 pub struct Sensor {
     min_range_m: f64,
     max_range_m: f64,
     epoch_ns: u64,
     effects: Effects,
+    angular_noise: AngularNoise,
 }
 impl Sensor {
     /// Construct an explicit-clock sensor. All effects default to ideal/noiseless.
@@ -126,6 +119,7 @@ impl Sensor {
             max_range_m,
             epoch_ns,
             effects,
+            angular_noise: AngularNoise::new(effects.angular_sigma_rad, effects.seed)?,
         })
     }
     /// Sample the default nominal profile at `first + i*stride`. Cadence is 5 us.
@@ -194,7 +188,7 @@ impl Sensor {
             let index = first + u64::from(offset) * u64::from(stride);
             let time_ns = self.epoch_ns + index * POINT_INTERVAL_NS;
             let e = self.effects;
-            let mut d = match pattern {
+            let d = match pattern {
                 ScanPattern::Nominal if stride <= 2 => {
                     if nominal_group != Some(index / 4) {
                         nominal_rays = crate::hardware::NominalPattern.group_directions(index);
@@ -205,22 +199,7 @@ impl Sensor {
                 ScanPattern::Nominal => crate::hardware::NominalPattern.direction(index),
                 _ => pattern.direction(index).expect("validated profile window"),
             };
-            if e.angular_sigma_rad > 0. {
-                let a = d[1].atan2(d[0]);
-                let z = d[2];
-                let c = (1. - z * z).max(0.).sqrt();
-                let tangent = [-a.sin(), a.cos(), 0.];
-                let vertical = [-z * a.cos(), -z * a.sin(), c];
-                let x = e.angular_sigma_rad * normal(e.seed, index, 10);
-                let y = e.angular_sigma_rad * normal(e.seed, index, 12);
-                for k in 0..3 {
-                    d[k] += x * tangent[k] + y * vertical[k];
-                }
-                let norm = d.iter().map(|x| x * x).sum::<f64>().sqrt();
-                for v in &mut d {
-                    *v /= norm;
-                }
-            }
+            let d = self.angular_noise.perturb_unit(index, d);
             let mut point = TimedReturn {
                 sample_index: index,
                 time_ns,
@@ -397,6 +376,127 @@ mod tests {
             let r = p.range_m.unwrap();
             assert!((r - 10. - p.point_sensor_m.unwrap()[0] / r).abs() < 1e-12);
         }
+    }
+
+    #[test]
+    fn angular_noise_changes_edge_occlusion_without_seeing_through_near_hits() {
+        struct Edge {
+            forward: [f64; 3],
+            left: [f64; 3],
+            front_m: f64,
+        }
+        impl Scene for Edge {
+            fn nearest_hit(&self, _: u64, d: [f64; 3], max: f64) -> Option<SurfaceHit> {
+                let dot = |a: [f64; 3], b: [f64; 3]| {
+                    a.into_iter().zip(b).map(|(a, b)| a * b).sum::<f64>()
+                };
+                let cosine = dot(d, self.forward);
+                // An opaque half-plane ahead of a full background plane. The
+                // nominal ray lies on its edge; noisy rays may clear the edge.
+                let depth = if dot(d, self.left) >= -1e-12 {
+                    self.front_m
+                } else {
+                    8.
+                };
+                let distance = depth / cosine;
+                (cosine > 0. && distance <= max).then_some(SurfaceHit {
+                    distance_m: distance,
+                    incidence_cosine: cosine.clamp(0., 1.),
+                    reflectance: 1.,
+                })
+            }
+        }
+        let forward = crate::hardware::NominalPattern.direction(0);
+        let horizontal = forward[0].hypot(forward[1]);
+        for front_m in [0.05, 2.] {
+            let edge = Edge {
+                forward,
+                left: [-forward[1] / horizontal, forward[0] / horizontal, 0.],
+                front_m,
+            };
+            let mut scan = RollingFrame::default();
+            Sensor::new(0.1, 40., 123, Effects::default())
+                .unwrap()
+                .sample_into(&edge, 0, 1, 1, &mut scan)
+                .unwrap();
+            assert_eq!(scan.points[0].range_m.is_some(), front_m >= 0.1);
+            let (mut foreground, mut background) = (0, 0);
+            for seed in 0..32 {
+                let effects = Effects {
+                    seed,
+                    angular_sigma_rad: 0.01,
+                    ..Default::default()
+                };
+                Sensor::new(0.1, 40., 123, effects)
+                    .unwrap()
+                    .sample_into(&edge, 0, 1, 1, &mut scan)
+                    .unwrap();
+                let p = scan.points[0];
+                assert_eq!((p.sample_index, p.time_ns), (0, 123));
+                if let Some(range) = p.range_m {
+                    let d = AngularNoise::new(0.01, seed)
+                        .unwrap()
+                        .perturb(0, forward)
+                        .unwrap();
+                    assert_eq!(p.point_sensor_m, Some(d.map(|v| v * range)));
+                    if range > 7. {
+                        background += 1;
+                    } else {
+                        assert!(front_m >= 0.1 && range < 3.);
+                        foreground += 1;
+                    }
+                } else {
+                    assert!(front_m < 0.1);
+                    foreground += 1;
+                }
+            }
+            assert!(foreground > 0 && background > 0);
+        }
+    }
+
+    #[test]
+    fn shared_angular_effects_preserve_per_emission_dynamic_mount_queries() {
+        struct RotatingWall;
+        impl Scene for RotatingWall {
+            fn nearest_hit(&self, time_ns: u64, d: [f64; 3], max: f64) -> Option<SurfaceHit> {
+                let t = time_ns as f64 * 1e-9;
+                let (s, c) = (100. * t).sin_cos();
+                let origin_x = (3. * t).sin() + 0.2 * c;
+                let distance = (-4. - origin_x) / (c * d[0] - s * d[1]);
+                (distance >= 0. && distance <= max).then_some(SurfaceHit {
+                    distance_m: distance,
+                    incidence_cosine: 1.,
+                    reflectance: 1.,
+                })
+            }
+        }
+        let sensor = Sensor::new(
+            0.1,
+            40.,
+            0,
+            Effects {
+                angular_sigma_rad: 0.001,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let mut scan = RollingFrame::default();
+        sensor
+            .sample_into(&RotatingWall, 0, 2000, 1, &mut scan)
+            .unwrap();
+        let mut hits = 0;
+        for p in scan.points {
+            if let Some(local) = p.point_sensor_m {
+                let t = p.time_ns as f64 * 1e-9;
+                let (s, c) = (100. * t).sin_cos();
+                // Rotate the raw point at its own time and apply the offset
+                // mount. Every return must lie on the fixed world wall x=-4.
+                let world_x = (3. * t).sin() + c * (0.2 + local[0]) - s * local[1];
+                assert!((world_x + 4.).abs() < 1e-10);
+                hits += 1;
+            }
+        }
+        assert!(hits > 100);
     }
     #[test]
     fn diffuse_response_is_opt_in_and_black_surface_occludes() {

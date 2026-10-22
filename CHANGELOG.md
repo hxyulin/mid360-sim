@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+### Rust API
+
+- Expose `effects::AngularNoise` for caller-owned raycasting backends. Reuse
+  the same model in `Sensor`, preserving existing seeded measurements and
+  zero-noise directions. Validate edge occlusion and per-emission rotating mounts.
+
 ### Performance
 
 - Skip disabled range noise and independent dropout work, and evaluate only
