@@ -115,6 +115,103 @@ impl Default for Effects {
         }
     }
 }
+/// Immutable optical directions for one caller-selected emission window.
+///
+/// Share a window between sensors only when their scan profile, global indices
+/// and stride match. Directions are local FLU unit vectors before angular noise;
+/// no pose, geometry, measurement noise or absolute timestamp is cached. Each
+/// sensor still applies its own effects and queries its scene at every emission.
+/// This amortizes direction generation across aligned sensors, at the cost of
+/// 24 bytes of direction payload per retained ray (up to 6 MiB), plus container
+/// overhead. A single sensor normally benefits
+/// from the allocation-free direction cursor in [`Sensor::sample_into`] instead.
+///
+/// ```
+/// use mid360_sim::{pattern::ScanPattern, sensor::PreparedRays};
+/// let rays = PreparedRays::new(ScanPattern::Nominal, 7, 200, 3)?;
+/// assert_eq!((rays.first_index(), rays.stride()), (7, 3));
+/// assert_eq!(rays.directions().len(), 200);
+/// assert_eq!(rays.directions()[1], ScanPattern::Nominal.direction(10).unwrap());
+/// # Ok::<(), &'static str>(())
+/// ```
+#[derive(Clone, Debug)]
+pub struct PreparedRays {
+    pattern: ScanPattern,
+    first: u64,
+    stride: u32,
+    last_offset_ns: u64,
+    directions: Vec<[f64; 3]>,
+}
+impl PreparedRays {
+    /// Prepare `count` unit directions at global indices `first + i * stride`.
+    ///
+    /// Indices/stride are dimensionless; the nominal cadence is 5,000 ns. Rejects
+    /// empty/oversized windows, zero stride, index/time overflow and unsupported
+    /// capture windows before allocating. Absolute epoch validation happens when
+    /// a sensor acquires the window. Preparation never reads or advances a clock.
+    pub fn new(
+        pattern: ScanPattern,
+        first: u64,
+        count: u32,
+        stride: u32,
+    ) -> Result<Self, &'static str> {
+        let last_offset_ns = checked_window(pattern, first, count, stride, 0)?;
+        let mut cursor = crate::pattern::DirectionCursor::new(pattern, first, stride);
+        let directions = (0..count)
+            .map(|i| cursor.direction(first + u64::from(i) * u64::from(stride)))
+            .collect();
+        Ok(Self {
+            pattern,
+            first,
+            stride,
+            last_offset_ns,
+            directions,
+        })
+    }
+    /// The optical profile used to generate this window; no device phase is inferred.
+    pub fn pattern(&self) -> ScanPattern {
+        self.pattern
+    }
+    /// First global emission index, dimensionless and independent of packet boundaries.
+    pub fn first_index(&self) -> u64 {
+        self.first
+    }
+    /// Global index spacing between retained emissions, dimensionless and nonzero.
+    pub fn stride(&self) -> u32 {
+        self.stride
+    }
+    /// Borrow immutable local FLU unit directions in acquisition order.
+    /// Misses are not known until acquisition; all scheduled emissions are present.
+    pub fn directions(&self) -> &[[f64; 3]] {
+        &self.directions
+    }
+}
+
+// Return the final simulation timestamp (ns), validating before caller output changes.
+#[inline]
+fn checked_window(
+    pattern: ScanPattern,
+    first: u64,
+    count: u32,
+    stride: u32,
+    epoch_ns: u64,
+) -> Result<u64, &'static str> {
+    if count == 0 || count as usize > MAX_LIDAR_RAYS || stride == 0 {
+        return Err("invalid acquisition size or stride");
+    }
+    let last = first
+        .checked_add(u64::from(count - 1) * u64::from(stride))
+        .ok_or("index overflow")?;
+    let last_ns = last
+        .checked_mul(POINT_INTERVAL_NS)
+        .and_then(|t| t.checked_add(epoch_ns))
+        .ok_or("timestamp overflow")?;
+    if !pattern.supports(last) {
+        return Err("acquisition exceeds scan profile duration");
+    }
+    Ok(last_ns)
+}
+
 /// Validated immutable acquisition configuration.
 pub struct Sensor {
     min_range_m: f64,
@@ -202,45 +299,98 @@ impl Sensor {
         stride: u32,
         out: &mut RollingFrame,
     ) -> Result<(), &'static str> {
-        if count == 0 || count as usize > MAX_LIDAR_RAYS || stride == 0 {
-            return Err("invalid acquisition size or stride");
-        }
-        let last = first
-            .checked_add(u64::from(count - 1) * u64::from(stride))
-            .ok_or("index overflow")?;
-        last.checked_mul(POINT_INTERVAL_NS)
-            .and_then(|t| t.checked_add(self.epoch_ns))
-            .ok_or("timestamp overflow")?;
-        if !pattern.supports(last) {
-            return Err("acquisition exceeds scan profile duration");
-        }
+        checked_window(pattern, first, count, stride, self.epoch_ns)?;
         // Choose the range-noise path once per acquisition so enabled noise
         // does not pay for an extra conditional at every valid return.
+        let mut directions = crate::pattern::DirectionCursor::new(pattern, first, stride);
         if self.effects.range_sigma_m > 0. {
-            self.sample_validated::<true>(scene, pattern, first, count, stride, out);
+            self.sample_validated::<true, _>(scene, first, count, stride, out, |_, index| {
+                directions.direction(index)
+            });
         } else {
-            self.sample_validated::<false>(scene, pattern, first, count, stride, out);
+            self.sample_validated::<false, _>(scene, first, count, stride, out, |_, index| {
+                directions.direction(index)
+            });
+        }
+        Ok(())
+    }
+
+    /// Acquire immutable prepared rays with this sensor's epoch and effects.
+    ///
+    /// Per-emission scene queries, first-surface occlusion, misses and output
+    /// coordinates match [`Self::sample_pattern_into`]. Success replaces `out`
+    /// while reusing its allocation. Different sensor epochs are supported:
+    /// timestamps remain `epoch_ns + global_index * 5_000`, in nanoseconds.
+    /// Returns an error without changing `out` if this epoch would overflow.
+    /// Sharing the directions never shares noisy measurements or deskewed points.
+    ///
+    /// ```
+    /// use mid360_sim::{pattern::ScanPattern, sensor::{PreparedRays, RollingFrame, Scene, Sensor, SurfaceHit}};
+    /// struct EmptyScene;
+    /// impl Scene for EmptyScene {
+    ///     fn nearest_hit(&self, _: u64, _: [f64; 3], _: f64) -> Option<SurfaceHit> { None }
+    /// }
+    /// let rays = PreparedRays::new(ScanPattern::Nominal, 7, 2, 3)?;
+    /// let mut frame = RollingFrame::default();
+    /// for epoch_ns in [1_000_000_000, 2_000_000_000] {
+    ///     let sensor = Sensor::new(0.1, 40., epoch_ns, Default::default())?;
+    ///     sensor.sample_prepared_into(&EmptyScene, &rays, &mut frame)?;
+    ///     assert_eq!(frame.points[0].time_ns, epoch_ns + 35_000);
+    ///     assert_eq!(frame.points[1].time_ns, epoch_ns + 50_000);
+    ///     assert!(frame.points.iter().all(|p| p.range_m.is_none()));
+    /// }
+    /// # Ok::<(), &'static str>(())
+    /// ```
+    pub fn sample_prepared_into(
+        &self,
+        scene: &impl Scene,
+        prepared: &PreparedRays,
+        out: &mut RollingFrame,
+    ) -> Result<(), &'static str> {
+        prepared
+            .last_offset_ns
+            .checked_add(self.epoch_ns)
+            .ok_or("timestamp overflow")?;
+        // Construction bounds this length to MAX_LIDAR_RAYS and rejects zero.
+        let count = prepared.directions.len() as u32;
+        if self.effects.range_sigma_m > 0. {
+            self.sample_validated::<true, _>(
+                scene,
+                prepared.first,
+                count,
+                prepared.stride,
+                out,
+                |i, _| prepared.directions[i as usize],
+            );
+        } else {
+            self.sample_validated::<false, _>(
+                scene,
+                prepared.first,
+                count,
+                prepared.stride,
+                out,
+                |i, _| prepared.directions[i as usize],
+            );
         }
         Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn sample_validated<const RANGE_NOISE: bool>(
+    fn sample_validated<const RANGE_NOISE: bool, D: FnMut(u32, u64) -> [f64; 3]>(
         &self,
         scene: &impl Scene,
-        pattern: ScanPattern,
         first: u64,
         count: u32,
         stride: u32,
         out: &mut RollingFrame,
+        mut direction: D,
     ) {
         out.points.clear();
-        let mut directions = crate::pattern::DirectionCursor::new(pattern, first, stride);
         for offset in 0..count {
             let index = first + u64::from(offset) * u64::from(stride);
             let time_ns = self.epoch_ns + index * POINT_INTERVAL_NS;
             let e = self.effects;
-            let d = directions.direction(index);
+            let d = direction(offset, index);
             let d = self.angular_noise.perturb_unit(index, d);
             let mut point = TimedReturn {
                 sample_index: index,
@@ -301,6 +451,189 @@ mod tests {
             })
         }
     }
+    fn assert_frame_bits(a: &RollingFrame, b: &RollingFrame) {
+        assert_eq!(a.points.len(), b.points.len());
+        for (a, b) in a.points.iter().zip(&b.points) {
+            assert_eq!((a.sample_index, a.time_ns), (b.sample_index, b.time_ns));
+            assert_eq!(a.range_m.map(f64::to_bits), b.range_m.map(f64::to_bits));
+            assert_eq!(
+                a.point_sensor_m.map(|p| p.map(f64::to_bits)),
+                b.point_sensor_m.map(|p| p.map(f64::to_bits))
+            );
+        }
+    }
+
+    #[test]
+    fn prepared_windows_preserve_live_queries_and_device_measurement_bits() {
+        #[derive(Default)]
+        struct MovingWall(std::cell::RefCell<Vec<(u64, [u64; 3])>>);
+        impl Scene for MovingWall {
+            fn nearest_hit(
+                &self,
+                time_ns: u64,
+                direction: [f64; 3],
+                max: f64,
+            ) -> Option<SurfaceHit> {
+                self.0
+                    .borrow_mut()
+                    .push((time_ns, direction.map(f64::to_bits)));
+                let t = time_ns as f64 * 1e-9;
+                let (s, c) = (3. * t).sin_cos();
+                let cosine = c * direction[0] - s * direction[1];
+                let distance = (5. - (2. * t).sin() * 0.2) / cosine;
+                (distance >= 0. && distance <= max).then_some(SurfaceHit {
+                    distance_m: distance,
+                    incidence_cosine: cosine.abs().min(1.),
+                    reflectance: 0.7,
+                })
+            }
+        }
+        for pattern in [
+            ScanPattern::Nominal,
+            ScanPattern::OfficialTable,
+            ScanPattern::HardwareMean,
+            ScanPattern::HardwareCapture,
+        ] {
+            for first in [7, crate::hardware::LAST_CAPTURE_SAMPLE - 1023] {
+                for stride in [1, 2, 3, 7] {
+                    let rays = PreparedRays::new(pattern, first, 32, stride).unwrap();
+                    assert_eq!(
+                        (rays.pattern(), rays.first_index(), rays.stride()),
+                        (pattern, first, stride)
+                    );
+                    assert_eq!(rays.directions().len(), 32);
+                    for (i, ray) in rays.directions().iter().enumerate() {
+                        assert_eq!(
+                            ray.map(f64::to_bits),
+                            pattern
+                                .direction(first + i as u64 * u64::from(stride))
+                                .unwrap()
+                                .map(f64::to_bits)
+                        );
+                    }
+                    for epoch in [0, 1_000_000_123] {
+                        for effects in [
+                            Effects::default(),
+                            Effects {
+                                seed: 17,
+                                range_sigma_m: 0.02,
+                                angular_sigma_rad: 0.001,
+                                dropout: 0.03,
+                                diffuse_dropout: true,
+                                ..Default::default()
+                            },
+                        ] {
+                            let sensor = Sensor::new(0.1, 40., epoch, effects).unwrap();
+                            let (old_scene, new_scene) =
+                                (MovingWall::default(), MovingWall::default());
+                            let (mut old, mut new) =
+                                (RollingFrame::default(), RollingFrame::default());
+                            sensor
+                                .sample_pattern_into(
+                                    &old_scene, pattern, first, 32, stride, &mut old,
+                                )
+                                .unwrap();
+                            sensor
+                                .sample_prepared_into(&new_scene, &rays, &mut new)
+                                .unwrap();
+                            assert_frame_bits(&old, &new);
+                            assert_eq!(*old_scene.0.borrow(), *new_scene.0.borrow());
+                            assert_eq!(new_scene.0.borrow().len(), 32);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn prepared_windows_preserve_chunking_decimation_occlusion_and_atomic_errors() {
+        let sensor = Sensor::new(
+            0.1,
+            40.,
+            10,
+            Effects {
+                range_sigma_m: 0.02,
+                angular_sigma_rad: 0.001,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let mut all = RollingFrame::default();
+        let rays = PreparedRays::new(ScanPattern::Nominal, 7, 101, 1).unwrap();
+        sensor
+            .sample_prepared_into(&Surface(10.), &rays, &mut all)
+            .unwrap();
+        let (mut a, mut b) = (RollingFrame::default(), RollingFrame::default());
+        sensor
+            .sample_prepared_into(
+                &Surface(10.),
+                &PreparedRays::new(ScanPattern::Nominal, 7, 37, 1).unwrap(),
+                &mut a,
+            )
+            .unwrap();
+        sensor
+            .sample_prepared_into(
+                &Surface(10.),
+                &PreparedRays::new(ScanPattern::Nominal, 44, 64, 1).unwrap(),
+                &mut b,
+            )
+            .unwrap();
+        a.points.append(&mut b.points);
+        assert_frame_bits(&all, &a);
+        sensor
+            .sample_prepared_into(
+                &Surface(10.),
+                &PreparedRays::new(ScanPattern::Nominal, 7, 34, 3).unwrap(),
+                &mut b,
+            )
+            .unwrap();
+        assert_frame_bits(
+            &RollingFrame {
+                points: all.points.iter().step_by(3).copied().collect(),
+            },
+            &b,
+        );
+        sensor
+            .sample_prepared_into(&Surface(0.05), &rays, &mut b)
+            .unwrap();
+        assert!(b.points.iter().all(|p| p.range_m.is_none()));
+        let original = all.clone();
+        let overflowing = Sensor::new(0.1, 40., u64::MAX, Effects::default()).unwrap();
+        assert!(
+            overflowing
+                .sample_prepared_into(&Surface(10.), &rays, &mut all)
+                .is_err()
+        );
+        assert_frame_bits(&original, &all);
+        for (pattern, first, count, stride) in [
+            (ScanPattern::Nominal, 0, 0, 1),
+            (ScanPattern::Nominal, 0, MAX_LIDAR_RAYS as u32 + 1, 1),
+            (ScanPattern::Nominal, 0, 1, 0),
+            (ScanPattern::Nominal, u64::MAX, 2, 1),
+            (ScanPattern::Nominal, u64::MAX / POINT_INTERVAL_NS + 1, 1, 1),
+            (
+                ScanPattern::HardwareCapture,
+                crate::hardware::LAST_CAPTURE_SAMPLE,
+                2,
+                1,
+            ),
+        ] {
+            assert!(PreparedRays::new(pattern, first, count, stride).is_err());
+        }
+        assert!(
+            PreparedRays::new(
+                ScanPattern::HardwareCapture,
+                crate::hardware::LAST_CAPTURE_SAMPLE,
+                1,
+                1
+            )
+            .is_ok()
+        );
+        fn shareable<T: Send + Sync>() {}
+        shareable::<PreparedRays>();
+    }
+
     #[test]
     fn probability_endpoints_are_exact_even_when_uniform_rounds_to_one() {
         const SEED: u64 = 7_849_933_349_262_882_758;

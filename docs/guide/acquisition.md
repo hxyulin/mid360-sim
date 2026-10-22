@@ -21,6 +21,37 @@ missed first emission. Python/Isaac `livox_fields()` exposes equivalent fields;
 Gazebo publishes its own native point schema. Simulator adapters do not
 implicitly start a ROS publisher.
 
+## Share aligned optical windows in Rust
+
+If several sensors use the same scan profile, global indices and stride,
+prepare their unperturbed local directions once. Use a separate `Sensor`, scene
+query context and `RollingFrame` for each device. The scene contexts below are
+provided by your host and must evaluate each physical mount at the query time:
+
+```rust
+use mid360_sim::{pattern::ScanPattern, sensor::{Effects, PreparedRays, RollingFrame, Sensor}};
+
+let sensor_a = Sensor::new(0.1, 40., 0, Effects { seed: 7, ..Default::default() })?;
+let sensor_b = Sensor::new(0.1, 40., 0, Effects { seed: 17, ..Default::default() })?;
+let window = PreparedRays::new(ScanPattern::Nominal, 7, 200, 1)?;
+let (mut scan_a, mut scan_b) = (RollingFrame::default(), RollingFrame::default());
+sensor_a.sample_prepared_into(&scene_a, &window, &mut scan_a)?;
+sensor_b.sample_prepared_into(&scene_b, &window, &mut scan_b)?;
+```
+
+Sharing does not imply equal world poses or shared measurements. Angular noise
+is applied separately before each scene query; range noise, dropout, misses and
+occlusion remain device-specific. Each timestamp uses that sensor's epoch and
+global emission index. Prepare a new window when indices/profile/stride change;
+retain the caller's acquisition schedule and geometry history.
+
+A window owns 24 bytes of direction payload per retained emission, at most
+6 MiB plus container overhead. It contains no world rays, surface hits or pose
+history. Borrow it across sensors instead of cloning the vector. There is no
+global cache, worker, simulator world or implicit clock. For one sensor, keep
+using `sample_into` or `sample_pattern_into` unless measurement justifies the
+extra preparation/allocation. See the [architecture measurements](../architecture-performance.md).
+
 ## Reuse angular effects in a backend
 
 `effects::AngularNoise` is independent of the scan generator and `Sensor`

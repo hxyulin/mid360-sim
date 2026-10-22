@@ -45,6 +45,10 @@ For isolated acquisition, effect, encoding and packet-queue timings, run
 [Rust performance baseline and follow-ups](rust-performance.md) for workload
 boundaries and the recorded local measurements.
 
+For shared optical-window scaling, run
+`cargo run --release --locked --example prepared_bench`; see
+[architecture experiments](architecture-performance.md) for scope and tradeoffs.
+
 ## Optional runtime checks
 
 ```sh

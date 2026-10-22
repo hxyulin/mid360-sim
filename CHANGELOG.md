@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- Add optional immutable prepared-ray windows for aligned Rust sensors, sharing
+  optical calculations while retaining each device's effects, epoch and live
+  per-emission geometry queries; include bounded-memory APIs and doctests.
+
 - Make disabled and probability-one dropout endpoints exact without changing
   the uniform mapping or Gaussian streams; rare rounded-endpoint outputs change.
 - Share dense four-lane work for hardware and official-table scan profiles,

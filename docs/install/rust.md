@@ -42,5 +42,9 @@ If your backend already owns acquisition and range effects, use
 your scene query without consuming mutable RNG state. See
 [reusing angular effects](../guide/acquisition.md#reuse-angular-effects-in-a-backend).
 
+For aligned multi-sensor workloads, `sensor::PreparedRays` can share optical
+direction generation while preserving live per-device queries and effects. See
+[shared optical windows](../guide/acquisition.md#share-aligned-optical-windows-in-rust).
+
 Generate local API documentation with `cargo doc --no-deps`. The core remains
 independent of all optional simulator adapters; it does not advance physics.

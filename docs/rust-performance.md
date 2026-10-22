@@ -8,6 +8,9 @@ They guide optimization priorities; they do not replace the
 [native backend results](performance-tradeoffs.md) or
 [ROS transport measurements](transport-evaluation.md).
 
+For the next architectural step and aligned multi-sensor measurements, see
+[shared optical work](architecture-performance.md).
+
 ## Implemented follow-up
 
 The retained changes share dense hardware/official-profile harmonics, traverse
