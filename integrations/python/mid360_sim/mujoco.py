@@ -9,6 +9,7 @@ geometry; schedule coherent short captures from the physics loop.
 
 import mujoco
 import numpy as np
+
 from .pattern import ScanFrame, directions, validate_window
 
 
@@ -52,6 +53,16 @@ class MujocoSensor:
             self.geom_groups = groups.astype(np.uint8)
         self.capacity = 0
 
+    def _reserve(self, count):
+        # validate_window bounds capacity to at most 200,000 retained rays.
+        # Only private intermediates are reused; ScanFrame arrays stay owned.
+        if count > self.capacity:
+            self.capacity = count
+            self._ranges = np.empty(count, dtype=np.float64)
+            self._ids = np.empty(count, dtype=np.int32)
+            self._world = np.empty((count, 3), dtype=np.float64)
+            self._rotation_scratch = np.empty((4, count), dtype=np.float64)
+
     def scan(self, first_index, count, epoch_ns=0, stride=1):
         """Sample the current mounted pose; original per-ray times remain explicit.
 
@@ -61,12 +72,10 @@ class MujocoSensor:
         validate_window(first_index, count, stride, epoch_ns)
         local = directions(first_index, count, stride)
         rotation = self.data.site_xmat[self.site_id].reshape(3, 3)
-        world = np.ascontiguousarray(local @ rotation.T)
+        self._reserve(count)
+        world = self._world[:count]
+        np.matmul(local, rotation.T, out=world)
         origin = np.ascontiguousarray(self.data.site_xpos[self.site_id])
-        if count > self.capacity:
-            self.capacity = count
-            self._ranges = np.empty(count, dtype=np.float64)
-            self._ids = np.empty(count, dtype=np.int32)
         ranges, ids = self._ranges[:count], self._ids[:count]
         mujoco.mj_multiRay(
             self.model,
@@ -161,21 +170,34 @@ class MujocoSensor:
         # temporary Nx3 arrays in every short physics-step query.
         x, y, z, w = q.T
         dx, dy, dz = local.T
-        tx = 2 * (y * dz - z * dy)
-        ty = 2 * (z * dx - x * dz)
-        tz = 2 * (x * dy - y * dx)
-        world = np.empty_like(local)
-        world[:, 0] = dx + w * tx + y * tz - z * ty
-        world[:, 1] = dy + w * ty + z * tx - x * tz
-        world[:, 2] = dz + w * tz + x * ty - y * tx
+        self._reserve(count)
+        tx, ty, tz, temporary = self._rotation_scratch[:, :count]
+        for target, a, b, c, d in (
+            (tx, y, dz, z, dy),
+            (ty, z, dx, x, dz),
+            (tz, x, dy, y, dx),
+        ):
+            np.multiply(a, b, out=target)
+            np.multiply(c, d, out=temporary)
+            np.subtract(target, temporary, out=target)
+            np.multiply(2, target, out=target)
+        world = self._world[:count]
+        for target, direction, a, b, c, d, e in (
+            (world[:, 0], dx, tx, y, tz, z, ty),
+            (world[:, 1], dy, ty, z, tx, x, tz),
+            (world[:, 2], dz, tz, x, ty, y, tx),
+        ):
+            # Preserve the original left-to-right multiply/add/subtract order.
+            np.multiply(w, a, out=target)
+            np.add(direction, target, out=target)
+            np.multiply(b, c, out=temporary)
+            np.add(target, temporary, out=target)
+            np.multiply(d, e, out=temporary)
+            np.subtract(target, temporary, out=target)
         distance = float(np.linalg.norm(p1 - p0)) * float(fraction[1] - fraction[0])
         if not np.isfinite(distance):
             raise ValueError("nonfinite pose displacement")
         groups = max(1, int(np.ceil(min(count, distance / (2 * origin_tolerance_m)))))
-        if count > self.capacity:
-            self.capacity = count
-            self._ranges = np.empty(count, dtype=np.float64)
-            self._ids = np.empty(count, dtype=np.int32)
         for group in range(groups):
             a, b = group * count // groups, (group + 1) * count // groups
             origin = np.ascontiguousarray(p0 + (p1 - p0) * ((t[a] + t[b - 1]) * 0.5))

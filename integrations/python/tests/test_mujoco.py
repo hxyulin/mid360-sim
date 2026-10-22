@@ -3,15 +3,46 @@
 """Real MuJoCo ray tests without a renderer or a display."""
 
 import unittest
-import numpy as np
+from unittest.mock import patch
+
 import mujoco
-from mid360_sim.pattern import MODEL, directions
+import numpy as np
 from mid360_sim.mujoco import MujocoSensor
+from mid360_sim.pattern import MODEL, directions
 
 XML = """<mujoco><worldbody>
 <geom name="wall" type="box" pos="5 0 0" size=".1 20 20" group="0"/>
 <body name="robot"><joint type="slide" axis="1 0 0"/><geom type="sphere" size=".05" contype="0" conaffinity="0" group="1"/><site name="lidar" pos="0 0 .8"/></body>
 </worldbody></mujoco>"""
+
+
+def reference_rolling_rays(local, pose_start, pose_end, fraction):
+    """Original allocating SLERP/rotation expressions, kept as a bitwise oracle."""
+    _p0, q0 = (np.asarray(v, dtype=float) for v in pose_start)
+    _p1, q1 = (np.asarray(v, dtype=float) for v in pose_end)
+    q0, q1 = q0 / np.linalg.norm(q0), q1 / np.linalg.norm(q1)
+    dot = float(np.dot(q0, q1))
+    if dot < 0:
+        q1, dot = -q1, -dot
+    t = np.linspace(fraction[0], fraction[1], len(local))
+    if dot > 0.99999999:
+        q = q0 + t[:, None] * (q1 - q0)
+        q /= np.linalg.norm(q, axis=1)[:, None]
+    else:
+        angle = np.arccos(np.clip(dot, -1.0, 1.0))
+        q = (
+            np.sin((1 - t) * angle)[:, None] * q0 + np.sin(t * angle)[:, None] * q1
+        ) / np.sin(angle)
+    x, y, z, w = q.T
+    dx, dy, dz = local.T
+    tx = 2 * (y * dz - z * dy)
+    ty = 2 * (z * dx - x * dz)
+    tz = 2 * (x * dy - y * dx)
+    world = np.empty_like(local)
+    world[:, 0] = dx + w * tx + y * tz - z * ty
+    world[:, 1] = dy + w * ty + z * tx - x * tz
+    world[:, 2] = dz + w * tz + x * ty - y * tx
+    return t, world
 
 
 class MujocoTests(unittest.TestCase):
@@ -60,7 +91,7 @@ class MujocoTests(unittest.TestCase):
         self.assertEqual(frame.timestamps_ns[1], 5100)
 
     def test_chunk_stride_owned_frames_preserve_dynamics(self):
-        model, data, sensor = self.setup_sensor()
+        _model, data, sensor = self.setup_sensor()
         time_before = data.time
         qpos = data.qpos.copy()
         full = sensor.scan(7, 1000, stride=3)
@@ -170,8 +201,177 @@ class MujocoTests(unittest.TestCase):
             self.assertTrue(frame.valid.any())
             np.testing.assert_allclose(frame.ranges_m, expected, rtol=0, atol=1e-10)
 
-    def test_rolling_origin_tolerance_and_invalid_poses(self):
+    def test_reused_scratch_matches_allocating_reference_and_owned_frames(self):
         model, data, sensor = self.setup_sensor()
+        native_multi_ray = mujoco.mj_multiRay
+        saved = []
+        axis = np.array([1.0, 2.0, -3.0]) / np.sqrt(14.0)
+
+        def compare_query(*args):
+            nonlocal offset
+            n = args[10]
+            a, b = offset, offset + n
+            np.testing.assert_array_equal(args[3].reshape(-1, 3), expected_world[a:b])
+            expected_origin = p0 + (p1 - p0) * ((t[a] + t[b - 1]) * 0.5)
+            np.testing.assert_array_equal(args[2], expected_origin)
+            native_multi_ray(
+                model,
+                data,
+                expected_origin,
+                expected_world[a:b].ravel(),
+                None,
+                1,
+                -1,
+                expected_ids[a:b],
+                expected_ranges[a:b],
+                None,
+                n,
+                70.0,
+            )
+            offset = b
+            return native_multi_ray(*args)
+
+        # Interleave held/rolling calls, growth/shrink, both SLERP branches,
+        # shortest-arc sign reversal, half turns and changing live geometry.
+        for step, (count, angle, stride) in enumerate(
+            (
+                (201, 0.0, 1),
+                (17, 1e-5, 3),
+                (301, np.pi, 7),
+                (1, np.pi - 1e-6, 1),
+                (67, 0.7, 3),
+            )
+        ):
+            data.qpos[0] = step * 0.1
+            mujoco.mj_forward(model, data)
+            held = sensor.scan(1001, count, stride=stride)
+            expected_held = (
+                held.directions @ data.site_xmat[sensor.site_id].reshape(3, 3).T
+            )
+            np.testing.assert_array_equal(sensor._world[:count], expected_held)
+            p0 = np.array([0.03 * step, -0.02 * step, 0.8])
+            p1 = p0 + [0.006, 0.004, 0.002]
+            q0 = [0.0, 0.0, 0.0, 1.0]
+            q1 = -np.r_[axis * np.sin(angle / 2), np.cos(angle / 2)]
+            fraction = (0.2, 0.8)
+            t, expected_world = reference_rolling_rays(
+                directions(1001, count, stride), (p0, q0), (p1, q1), fraction
+            )
+            expected_ranges = np.empty(count)
+            expected_ids = np.empty(count, dtype=np.int32)
+            offset = 0
+
+            with patch(
+                "mid360_sim.mujoco.mujoco.mj_multiRay", side_effect=compare_query
+            ):
+                frame = sensor.scan_rolling(
+                    1001,
+                    count,
+                    (p0, q0),
+                    (p1, q1),
+                    stride=stride,
+                    epoch_ns=123,
+                    pose_fraction=fraction,
+                    origin_tolerance_m=0.001,
+                )
+            self.assertEqual(offset, count)
+            invalid = (
+                (expected_ranges < 0.1)
+                | (expected_ranges > 70)
+                | ~np.isfinite(expected_ranges)
+            )
+            expected_ranges[invalid], expected_ids[invalid] = -1, -1
+            np.testing.assert_array_equal(frame.ranges_m, expected_ranges)
+            np.testing.assert_array_equal(frame.geom_ids, expected_ids)
+            for result in (held, frame):
+                arrays = (result.directions, result.ranges_m, result.geom_ids)
+                self.assertTrue(all(array.flags.owndata for array in arrays))
+                self.assertTrue(
+                    all(not np.shares_memory(array, sensor._world) for array in arrays)
+                )
+                saved.append((result, tuple(array.copy() for array in arrays)))
+            for old, copies in saved:
+                for array, copy in zip(
+                    (old.directions, old.ranges_m, old.geom_ids), copies
+                ):
+                    np.testing.assert_array_equal(array, copy)
+        self.assertEqual(sensor.capacity, 301)
+        world, scratch = sensor._world, sensor._rotation_scratch
+        sensor.scan_rolling(0, 200, (p0, q0), (p1, q1))
+        self.assertIs(sensor._world, world)
+        self.assertIs(sensor._rotation_scratch, scratch)
+        self.assertEqual(scratch.shape, (4, 301))
+        with self.assertRaises(ValueError):
+            sensor.scan(0, 200001)
+        self.assertEqual(sensor.capacity, 301)
+
+    def test_rolling_chunk_stride_and_near_occlusion(self):
+        model, data, sensor = self.setup_sensor()
+        p0, p1 = np.array([0.0, 0.0, 0.8]), np.array([0.02, 0.01, 0.8])
+        q0, q1 = [0.0, 0.0, 0.0, 1.0], [0.0, 0.0, 1.0, 0.0]
+        # One native origin per emission avoids the documented grouping error.
+        kwargs = {"stride": 3, "origin_tolerance_m": 1e-9}
+        full = sensor.scan_rolling(7, 201, (p0, q0), (p1, q1), **kwargs)
+        first = sensor.scan_rolling(
+            7, 101, (p0, q0), (p1, q1), pose_fraction=(0.0, 0.5), **kwargs
+        )
+        second = sensor.scan_rolling(
+            310, 100, (p0, q0), (p1, q1), pose_fraction=(0.505, 1.0), **kwargs
+        )
+        np.testing.assert_array_equal(
+            full.directions, np.r_[first.directions, second.directions]
+        )
+        np.testing.assert_array_equal(
+            full.geom_ids, np.r_[first.geom_ids, second.geom_ids]
+        )
+        np.testing.assert_allclose(
+            full.ranges_m, np.r_[first.ranges_m, second.ranges_m], rtol=0, atol=1e-12
+        )
+        xml = XML.replace(
+            '<site name="lidar"',
+            '<geom type="sphere" pos="0 0 .8" size=".05" group="2" contype="0" conaffinity="0"/><site name="lidar"',
+        )
+        model, data, sensor = self.setup_sensor(xml)
+        blocked = sensor.scan_rolling(0, 201, (p0, q0), (p0, q1))
+        self.assertFalse(blocked.valid.any())
+        np.testing.assert_array_equal(blocked.geom_ids, -1)
+        filtered = MujocoSensor(model, data, "lidar", geom_groups=[1, 1, 0, 1, 1, 1])
+        self.assertTrue(filtered.scan_rolling(0, 201, (p0, q0), (p0, q1)).valid.any())
+
+    def test_rolling_queries_current_nearest_moving_geometry(self):
+        xml = XML.replace(
+            '<body name="robot">',
+            '<body name="obstacle" pos="2 0 0">'
+            '<joint type="slide" axis="1 0 0"/>'
+            '<geom name="near" type="box" size=".1 20 20"/></body>'
+            '<body name="robot">',
+        )
+        model, data, sensor = self.setup_sensor(xml)
+        origin, q0, q1 = (
+            [0.0, 0.0, 0.8],
+            [0.0, 0.0, 0.0, 1.0],
+            [0.0, 0.0, 0.1, np.sqrt(0.99)],
+        )
+        first = int(np.argmax(directions(0, 20000)[:, 0]))
+        _, world = reference_rolling_rays(
+            directions(first, 201), (origin, q0), (origin, q1), (0.0, 1.0)
+        )
+        forward = world[:, 0] > 0.5
+        self.assertTrue(forward.any())
+        near_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "near")
+        for displacement in (0.0, 0.5, -0.2):
+            data.qpos[0] = displacement
+            mujoco.mj_forward(model, data)
+            frame = sensor.scan_rolling(first, 201, (origin, q0), (origin, q1))
+            np.testing.assert_array_equal(frame.geom_ids[forward], near_id)
+            np.testing.assert_allclose(
+                frame.ranges_m[forward],
+                (1.9 + displacement) / world[forward, 0],
+                rtol=1e-12,
+            )
+
+    def test_rolling_origin_tolerance_and_invalid_poses(self):
+        _model, _data, sensor = self.setup_sensor()
         p0 = np.array([0.0, 0.0, 0.8])
         p1 = np.array([0.01, 0.0, 0.8])
         q = [0.0, 0.0, 0.0, 1.0]
