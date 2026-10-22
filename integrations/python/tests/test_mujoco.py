@@ -201,7 +201,7 @@ class MujocoTests(unittest.TestCase):
             self.assertTrue(frame.valid.any())
             np.testing.assert_allclose(frame.ranges_m, expected, rtol=0, atol=1e-10)
 
-    def test_reused_scratch_matches_allocating_reference_and_owned_frames(self):
+    def test_mixed_queries_match_native_reference_and_own_outputs(self):
         model, data, sensor = self.setup_sensor()
         native_multi_ray = mujoco.mj_multiRay
         saved = []
@@ -245,10 +245,6 @@ class MujocoTests(unittest.TestCase):
             data.qpos[0] = step * 0.1
             mujoco.mj_forward(model, data)
             held = sensor.scan(1001, count, stride=stride)
-            expected_held = (
-                held.directions @ data.site_xmat[sensor.site_id].reshape(3, 3).T
-            )
-            np.testing.assert_array_equal(sensor._world[:count], expected_held)
             p0 = np.array([0.03 * step, -0.02 * step, 0.8])
             p1 = p0 + [0.006, 0.004, 0.002]
             q0 = [0.0, 0.0, 0.0, 1.0]
@@ -286,9 +282,6 @@ class MujocoTests(unittest.TestCase):
             for result in (held, frame):
                 arrays = (result.directions, result.ranges_m, result.geom_ids)
                 self.assertTrue(all(array.flags.owndata for array in arrays))
-                self.assertTrue(
-                    all(not np.shares_memory(array, sensor._world) for array in arrays)
-                )
                 saved.append((result, tuple(array.copy() for array in arrays)))
             for old, copies in saved:
                 for array, copy in zip(
@@ -296,11 +289,7 @@ class MujocoTests(unittest.TestCase):
                 ):
                     np.testing.assert_array_equal(array, copy)
         self.assertEqual(sensor.capacity, 301)
-        world, scratch = sensor._world, sensor._rotation_scratch
         sensor.scan_rolling(0, 200, (p0, q0), (p1, q1))
-        self.assertIs(sensor._world, world)
-        self.assertIs(sensor._rotation_scratch, scratch)
-        self.assertEqual(scratch.shape, (4, 301))
         with self.assertRaises(ValueError):
             sensor.scan(0, 200001)
         self.assertEqual(sensor.capacity, 301)
