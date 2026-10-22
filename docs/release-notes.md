@@ -2,32 +2,62 @@
 <!-- Copyright (c) 2026 hxyulin <hxyulin@proton.me> -->
 # mid360-sim 0.1.0
 
-These are draft notes for the first multi-simulator release candidate, not a
-record of an uploaded release. They describe current source; review them with
-the exact tag/revision before publishing. See [distribution](distribution.md)
-for availability and artifact verification.
+Draft notes for the first multi-simulator release candidate. These describe the
+current candidate source, not an uploaded release. Match the eventual tag and
+artifact `release.json` to the source revision before publishing. See
+[distribution](https://hxyulin.github.io/mid360-sim/distribution.html) for availability and artifact verification.
 
-The candidate packages a representative MID-360 scan law, explicit acquisition
-times and optional scene adapters.
+## Included capabilities
 
-- Dependency-free Rust core with seeded, batching-invariant sensor effects.
-- rclrs / ROS 2 Jazzy room demo publishing Livox Driver 2 messages and /clock.
-- Isaac Sim 6.2 Warp extension, MuJoCo 3.7 Python adapter and Gazebo Harmonic plugin.
-- Compact four-lane nominal optics with a representative 18.2-hour cycle.
-- Isaac deferred readback, static bulk histories and explicit moving partitions.
-- Optional MuJoCo rolling sensor poses with bounded origin approximation.
-- Separate installation guides, acquisition contracts and native backend comparisons.
+- Dependency-free Rust scan generation and scene queries, with explicit
+  per-emission times, misses and seeded effects invariant to chunking/decimation.
+- Compact four-lane nominal optics with a representative 18.2-hour cycle,
+  distinct official-table and hardware-fit profiles, and checksummed provenance.
+- Optional rclrs / ROS 2 Jazzy publishers for Livox CustomMsg, timed PointCloud2,
+  caller-provided SI IMU and physical static/dynamic TF.
+- Isaac Sim 6.2 Warp extension with deferred readback, static bulk histories and
+  explicit moving partitions/rigid histories; MuJoCo 3.7 adapter with optional
+  rolling sensor poses; Gazebo Harmonic source plugin.
+- Synchronized LiDAR/IMU and navigation examples with rotating mounts, an
+  optional external RM host consumer and external TriLIO regression.
+- Bounded deterministic packet delay, jitter, loss and reordering on a
+  caller-owned delivery timeline, with separate injected/capacity-loss counts.
+- Independent moving-link geometry regressions, native transport benchmarks,
+  and an offline known-target material/edge validation workflow with explicit
+  synthetic fixtures and held-out recording sessions.
+- Task-oriented install guides, capability/status summary and separate evidence
+  reports for hardware fits, motion, native backends, navigation and transport.
 
-Read [installation](https://hxyulin.github.io/mid360-sim/guide/getting-started.html)
-and [artifact contents](https://hxyulin.github.io/mid360-sim/distribution.html).
-Verify downloads against SHA256SUMS. Registry publication is not part of this release.
+## Artifacts and installation
 
-This is an empirical approximation, not a calibrated Livox emulator. Geometry
-motion differs by adapter; use the documented acquisition policy. The current
-LiDAR scope is feature-complete; dynamics and IMU synthesis remain caller-owned,
-and localization belongs to the navigation stack. Calibrated material response
-and broader articulated-robot validation are optional extensions. See
-[use with a navigation stack](guide/navigation.md) for downstream integration.
-Offline pose-policy tests and native simulator replay are separate evidence;
-the latter uses measured motion with exact synthetic geometry, not a calibrated
-hardware range reference. See [current runtime/accuracy results](performance-tradeoffs.md). See [validation](https://hxyulin.github.io/mid360-sim/guide/validation.html).
+The candidate contains complete source, a Rust source crate, a Python adapter
+wheel, an Isaac extension ZIP and a Gazebo source bundle, plus `release.json`
+and `SHA256SUMS`. No simulator runtime, CAD, recorded dataset or private decoder
+is bundled. Registry publication is separate; no PyPI/crates.io upload is made.
+
+Start with [installation](https://hxyulin.github.io/mid360-sim/guide/getting-started.html), choose the
+[appropriate artifact](https://hxyulin.github.io/mid360-sim/distribution.html#choose-an-artifact), and verify its hash
+against `SHA256SUMS` from the same release. Source archives include the guides;
+hosted documentation follows main and may advance after this candidate.
+
+## Validation and limits
+
+This is an empirical approximation, not a calibrated Livox emulator. Callers own
+dynamics, optical geometry, pose interpolation, scheduling, IMU measurements and
+extrinsics. Navigation consumers own deskewing, localization and recovery. Motion
+semantics differ by adapter; see [capabilities and status](https://hxyulin.github.io/mid360-sim/guide/status.html).
+
+Rust tests include deterministic fault scheduling, unchanged payloads and moving
+mast/two-link scenes checked against independent triangles. Python tests check
+calibration input integrity, miss retention and separation of training/validation.
+Native ROS smoke has passed on macOS arm64 at full rate and stride 3; Linux DDS
+runtime validation remains open. Loaded transport runs have also exposed missing
+deliveries and bounded-queue losses, so no universal lossless-delivery or real-time
+capacity guarantee is made.
+
+Material/beam/noise calibration still needs independent physical measurements;
+the new workflow's synthetic success is a tooling check. Native replay measures
+agreement with its stated motion/geometry reference, not calibrated hardware
+range precision. See [validation](https://hxyulin.github.io/mid360-sim/guide/validation.html),
+[runtime/accuracy results](https://hxyulin.github.io/mid360-sim/performance-tradeoffs.html), and
+[transport evidence](https://hxyulin.github.io/mid360-sim/transport-evaluation.html) for conditions and limits.

@@ -9,6 +9,8 @@ import re
 import subprocess
 import tomllib
 
+from model_checks import compare_header, compare_model
+
 ROOT = Path(__file__).resolve().parents[1]
 version = tomllib.loads((ROOT / "Cargo.toml").read_text())["package"]["version"]
 assert (
@@ -36,19 +38,17 @@ for name in ["LICENSE-MIT", "LICENSE-APACHE", "NOTICE.md"]:
 model = subprocess.check_output(
     ["cargo", "run", "--quiet", "--locked", "--example", "export_isaac_model"], cwd=ROOT
 )
-for name in [
+copies = [
     "integrations/python/mid360_sim/nominal.json",
     "integrations/isaac-sim/exts/hxyulin.mid360/mid360/isaac/nominal.json",
-]:
-    assert json.loads(model) == json.loads(
-        (ROOT / name).read_bytes()
-    ), f"Stale model: {name}"
+]
+assert (ROOT / copies[0]).read_bytes() == (ROOT / copies[1]).read_bytes(), "Bundled model copies differ"
+for name in copies:
+    compare_model(json.loads(model), json.loads((ROOT / name).read_bytes()))
 header = subprocess.check_output(
     ["cargo", "run", "--quiet", "--locked", "--example", "export_gazebo_model"],
     cwd=ROOT,
 )
-assert (
-    header == (ROOT / "integrations/gazebo/include/mid360/model.hh").read_bytes()
-), "Stale Gazebo header"
+compare_header(header.decode(), (ROOT / "integrations/gazebo/include/mid360/model.hh").read_text())
 assert re.fullmatch(r"\d+\.\d+\.\d+(?:-[\w.]+)?", version)
 print(f"Repository versions, licenses and generated models agree ({version}).")

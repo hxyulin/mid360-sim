@@ -23,6 +23,9 @@ jobs:
       - run: cargo test --locked
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: python scripts/check-repository.py
+      - run: python scripts/test-model-checks.py
+      - run: python -m unittest discover -s examples/calibration -v
+      - run: cargo run --release --locked --example packet_faults
   python:
     runs-on: ubuntu-24.04
     strategy:

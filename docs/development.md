@@ -14,6 +14,7 @@ cargo test --locked
 cargo clippy --all-targets --locked -- -D warnings
 cargo deny --config deny.toml check
 python scripts/check-repository.py
+python scripts/test-model-checks.py
 ```
 
 Deterministic adapter and articulated-scene regressions run in `cargo test`.
@@ -26,7 +27,10 @@ cargo run --release --locked --example packet_faults
 
 The repository check compares bundled nominal model copies against Rust exports,
 checks distribution versions and verifies packaged licenses/notices. Keep source
-provenance when changing derived coefficients. Do not commit captures, CAD,
+provenance when changing derived coefficients. Coefficients, clocks and emission
+indices compare exactly; generated unit-vector reference components allow 1e-14
+absolute cross-platform libm variation. This is a numeric export check, not an
+angular fit/noise tolerance. Do not commit captures, CAD,
 build trees or private decoders; `local-assets/` is disposable ignored scratch.
 
 ## Optional runtime checks

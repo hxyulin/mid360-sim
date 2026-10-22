@@ -57,6 +57,10 @@
 
 ### Offline tools
 
+- Keep exported model coefficients and clocks exact while allowing 1e-14
+  component-wise libm variation in generated reference rays across platforms.
+  Validate package completeness and checksums for the new regression tooling.
+
 - Add checksummed local edge fixtures and per-ray missing/false-foreground/
   false-background regression checks, with portable synthetic occlusion tests.
 
@@ -65,6 +69,9 @@
   Retire the experimental layered repair example from the supported workflow.
 
 ### Documentation
+
+- Refresh the 0.1.0 candidate notes and release preparation commands; run the
+  packet fault example and calibration workflow tests in CI and release checks.
 
 - Consolidate capabilities and validation gaps in one status guide, shorten the
   navigation guide by moving historical results into its evidence report, and

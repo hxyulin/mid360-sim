@@ -3,7 +3,7 @@
 # Distribution
 
 Version 0.1.0 is the first multi-simulator release candidate. As of the
-2026-10-22 documentation audit, no tagged release or downloadable GitHub release
+2026-10-23 release-preparation check, no tagged release or downloadable GitHub release
 has been published. The artifact names below describe prepared outputs, not
 currently available downloads. Use a source checkout for the current APIs.
 See [GitHub releases](https://github.com/hxyulin/mid360-sim/releases) for assets
@@ -67,12 +67,13 @@ hash-locked release tools. Consumer source builds do not require Git:
 uv venv --python 3.12 local-assets/release-venv
 uv pip sync --python local-assets/release-venv/bin/python --require-hashes requirements-release.txt
 local-assets/release-venv/bin/python scripts/check-repository.py
-local-assets/release-venv/bin/python scripts/package-release.py --allow-dirty
+local-assets/release-venv/bin/python scripts/package-release.py
 local-assets/release-venv/bin/python scripts/check-release.py dist
 ```
 
 `--allow-dirty` is for a local preview and records `dirty: true`; omit it for a
-reviewed commit. Output must be a new directory. The packager never uploads,
+reviewed commit, as in the command above. Use `--output NEW_DIRECTORY` to retain
+multiple candidates without overwriting prior artifacts. Output must be a new directory. The packager never uploads,
 tags or publishes. Source tarballs use Zstandard level 22; tar metadata and Kit
 ZIP metadata are normalized. Wheel build dependencies are hash-locked, and
 `SOURCE_DATE_EPOCH` comes from the source commit unless explicitly supplied.
