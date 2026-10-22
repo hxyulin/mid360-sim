@@ -17,7 +17,7 @@ for simulator measurements; use the evidence below for the question you need ans
 | Does native RTX preserve motion? | [RTX experiments](../rtx-reference.md) | Range error, completeness and timestamp behavior | Custom repeating profile; not the MID-360 scan pattern |
 | How does the official plugin behave? | [Official audit and native execution](../official-reference.md) | Snapshot agreement and an explicitly assigned rolling correspondence | Official messages lack per-point timestamps |
 | Do ideal acquisition semantics work? | [Controlled motion](../motion-distortion.md) | Numerical geometry, time and deskew checks | No calibrated hardware noise or dynamics |
-| Can I turn real scans into optical geometry? | [ETH3D Office worked example](scanned-geometry.md) | Held-out Faro range agreement, missed rays and native MuJoCo replay | Scene reconstruction, not a real MID-360 return comparison |
+| Can I turn real scans into optical geometry? | [ETH3D Office worked example](scanned-geometry.md) | Held-out Faro range agreement, missed rays and native MuJoCo replay | Two training viewpoints; excluded-point reconstruction, not unseen-view or real MID-360 accuracy |
 
 The native replay uses a two-second high-motion segment of independent 100 Hz
 MoCap in an exact synthetic room. Its reference interpolates between measured

@@ -2,9 +2,9 @@
 <!-- Copyright (c) 2026 hxyulin <hxyulin@proton.me> -->
 # Turn public scans into a LiDAR scene
 
-This example reconstructs **ETH3D Office**, loads the observed surfaces into
-MuJoCo, and runs the existing MID360 adapter against them. It also checks the
-mesh against real laser returns excluded from reconstruction.
+This example combines **both ETH3D Office scanner views** into one optical mesh,
+loads it into MuJoCo, and runs the existing MID360 adapter. Points from each scan
+are reserved before reconstruction and used to check the resulting surfaces.
 
 The useful result is a repeatable **scene-conversion test**. ETH3D's scans come
 from a Faro survey scanner, so the range errors below describe reconstruction
@@ -61,19 +61,32 @@ These are ETH3D's already-cleaned scans, not unprocessed sensor packets.
 The example applies this sequence:
 
 1. Place finite nonzero-range points within 20 m using the supplied transforms.
-2. Split **scan1 before processing**: indices `i % 5 == 0` are validation;
-   the other 80% supply geometry. No ICP is fitted to scan2.
-3. Average training points into **1 cm voxels**. Estimate normals using a
-   4 cm neighbourhood, at most 32 neighbours, oriented toward the source scanner.
-4. Ball-pivot at **1.5 / 2.5 / 4 cm** radii. Remove triangles with an edge
-   over **6 cm** and degenerate triangles. Leave unknown areas unfilled.
-5. Raycast 200,000 withheld scan1 points and 200,000 independent scan2 points
-   from their actual scanner origins, seed `20261022`.
+2. Split **each scan before processing**: filtered indices `i % 5 == 0` are
+   validation; the other 80% supply geometry. Reserve all validation points,
+   including those not selected for the 200,000-ray evaluation sample per view.
+3. Average each training view into **1 cm voxels**. Estimate normals using a
+   4 cm neighbourhood, at most 32 neighbours, oriented toward that view's scanner.
+4. Merge scan2 representatives into nearby scan1 representatives only at
+   **≤5 mm separation and normal dot ≥0.95**. Average compatible groups and keep
+   unmatched or opposing surfaces separate. These are reconstruction heuristics,
+   not sensor specifications. No ICP is fitted to validation points.
+5. Ball-pivot the **joint point cloud once**, at **1.5 / 2.5 / 4 cm** radii.
+   Remove triangles with an edge over **6 cm** and degenerate triangles. Leave
+   unknown areas unfilled; do not overlay two independently finished meshes.
+6. Raycast 200,000 reserved points per scan from their actual scanner origins,
+   seed `20261022`, and repeat those queries through native MuJoCo.
 
-The exported and simulated mesh contains **only scan1 training geometry**:
-772,989 vertices and 1,518,491 triangles. Scan2 remains a different-viewpoint
-test throughout. This example does not benchmark temporal filtering or multi-view
-fusion; those require separately partitioned observations and visibility evidence.
+There are no manual boundary patches or blanket free-space pruning. Preserving
+source-view origins helps distinguish surface support, occlusion and unknown
+coverage; a nearer mesh intersection alone is not a complete fusion policy.
+
+**Both viewpoints now supply training data.** The tests measure reconstruction
+of excluded observations at those scanner positions, not generalization to an
+unseen third viewpoint. Input partitions and sampled index hashes are in the
+report; local output also retains the exact sampled indices.
+
+The exported and simulated mesh has **948,293 vertices and
+1,864,268 triangles**, built from the two training partitions.
 
 ## Results: count missed rays too
 
@@ -81,23 +94,28 @@ For each recorded point, cast its actual direction into the reconstructed mesh.
 Compare the first-hit range to the recorded range. The table uses **native
 MuJoCo `mj_multiRay`**; the report also contains the closely agreeing Open3D result.
 
-| Withheld test | Mesh hit rate | All rays within 2 cm | Median error | p95 error | RMS error |
+| Reserved observations | Mesh hit rate | All rays within 2 cm | Median error | p95 error | RMS error |
 |---|---:|---:|---:|---:|---:|
-| Same scan, unused points | 99.15% | 99.03% | 0.27 mm | 1.82 mm | 9.99 mm |
-| Entire second viewpoint | 87.31% | 86.00% | 0.77 mm | 3.29 mm | 114.48 mm |
+| Scan1 | 99.57% | 99.26% | 0.46 mm | 2.35 mm | 38.08 mm |
+| Scan2 | 99.57% | 99.23% | 0.45 mm | 2.13 mm | 43.63 mm |
 
 **Median, p95 and RMS include hits only.** The hit rate and “all rays within
-2 cm” columns include every evaluated ray, so a missing surface cannot disappear
-from the score. The very small medians reproduce dense survey observations;
-they are not a precision specification for a virtual or real MID360.
+2 cm” columns include every evaluated ray, so missing geometry cannot disappear
+from the score. Small typical errors reproduce dense survey observations; they
+are not a precision specification for a virtual or real MID360.
 
-![Cumulative absolute range error for same-view and second-view rays, with missed rays included in the denominator.](/eth3d/coverage-error.svg)
+![Cumulative absolute range error for reserved points from both source views, with misses included in the denominator.](/eth3d/coverage-error.svg)
 
-The second-view curve never reaches 100% because some foreground surfaces are
-missing. A ray can pass through a small hole and hit geometry metres behind it.
-That long tail explains the **114 mm RMS despite a 3.3 mm p95**. Low median error
-alone would hide this failure. Registration uncertainty, edges and reference
-measurement error also remain part of the comparison.
+![Matched-ray scan2 panorama: held-out Faro reference, joint reconstruction, absolute per-ray errors and missing fractions.](/eth3d/range-panorama.webp)
+
+*ETH3D Office, Schöps et al., CVPR 2017. Derived figures, CC BY-NC-SA 4.0.
+The panorama uses 2° bins with at least two reference samples; grey means
+insufficient display support. Display binning does not change numerical scores.*
+
+Remaining tails can include holes, depth boundaries, overlapping surface evidence,
+registration uncertainty and reference measurement errors. A ray passing through
+a foreground gap may hit a surface far behind it. The example does not classify
+these residuals as windows or replace recorded finite ranges with infinity.
 
 ## Generate an actual nominal scan
 
@@ -151,6 +169,12 @@ Keep per-view poses, scanner origins and timestamps. With moving captures,
 establish pose/time alignment and deskew before accumulating surfaces. With
 stationary captures, use time-separated observations to reject unstable ranges.
 Save independent views or time windows for evaluation before fitting anything.
+
+Reliable input coverage comes before local mesh repair. A single scan can miss
+foreground surfaces that a different viewpoint needs; a merged PCD should keep
+its source origins and alignment provenance. Reserve observations from every
+source scan before fitting, and use a third view when testing unseen-view
+generalization. More coverage does not make meshing or registration errors vanish.
 
 For multi-view data, distinguish **observed free space**, **surface support**,
 **occlusion**, and **unknown space**. A surface behind another recorded return

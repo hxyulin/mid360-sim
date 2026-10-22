@@ -129,6 +129,47 @@ class MujocoTests(unittest.TestCase):
         np.testing.assert_array_equal(frame.timestamps_ns, frame.indices * 5000)
         self.assertEqual(data.time, 0.0)
 
+    def test_rolling_small_and_near_half_turn_about_arbitrary_axis(self):
+        walls = []
+        for dimension in range(3):
+            for sign in (-1, 1):
+                position, half = [0.0] * 3, [10.1] * 3
+                position[dimension], half[dimension] = sign * 10.1, 0.1
+                walls.append(
+                    f'<geom type="box" pos="{" ".join(map(str, position))}" '
+                    f'size="{" ".join(map(str, half))}"/>'
+                )
+        model, data, sensor = self.setup_sensor(
+            '<mujoco><worldbody><site name="lidar" pos="0 0 .8"/>'
+            + "".join(walls)
+            + "</worldbody></mujoco>"
+        )
+        origin = np.array([0.0, 0.0, 0.8])
+        axis = np.array([1.0, 2.0, -3.0]) / np.sqrt(14.0)
+        skew = np.array(
+            [[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]]
+        )
+        geom = np.empty(1, dtype=np.int32)
+        for angle in (1e-5, np.pi - 1e-6):
+            # Negated endpoint must follow the same shortest rotation.
+            q1 = -np.r_[axis * np.sin(angle / 2), np.cos(angle / 2)]
+            frame = sensor.scan_rolling(
+                1000, 67, (origin, [0, 0, 0, 1]), (origin, q1), stride=3
+            )
+            expected = []
+            for t, local in zip(np.linspace(0, 1, 67), frame.directions):
+                rotation = (
+                    np.eye(3)
+                    + np.sin(t * angle) * skew
+                    + (1 - np.cos(t * angle)) * (skew @ skew)
+                )
+                distance = mujoco.mj_ray(
+                    model, data, origin, rotation @ local, None, 1, -1, geom
+                )
+                expected.append(distance if 0.1 <= distance <= 70 else -1)
+            self.assertTrue(frame.valid.any())
+            np.testing.assert_allclose(frame.ranges_m, expected, rtol=0, atol=1e-10)
+
     def test_rolling_origin_tolerance_and_invalid_poses(self):
         model, data, sensor = self.setup_sensor()
         p0 = np.array([0.0, 0.0, 0.8])

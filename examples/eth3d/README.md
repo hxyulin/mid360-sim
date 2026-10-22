@@ -21,9 +21,16 @@ must not already exist. It contains the mesh, a loadable MuJoCo scene, measured-
 validation, two million nominal emissions, figures and source/license provenance.
 An existing verified source directory can be supplied without `--download`.
 
-Only scan1 builds geometry; all scan2 returns remain withheld. No GPU, ROS, vendor
-SDK, private recording or decoder is required. Inputs and generated assets stay
-local. This is an offline scene example, not a second dynamics world in an adapter.
+Both scans supply training geometry. Every fifth filtered point in each scan is
+reserved before voxelization, normal estimation or fusion; 200,000 reserved points
+per view are sampled for evaluation. Nearby points merge only when their surface
+normals agree, then the joint cloud is meshed once. There are no manual boundary
+repairs or free-space pruning. This tests excluded points at observed scanner
+positions, not an unseen third viewpoint.
+
+No GPU, ROS, vendor SDK, private recording or decoder is required. Inputs and
+generated assets stay local. This is an offline scene example, not a second
+dynamics world in an adapter.
 
 ETH3D Office is by Schöps et al., *A Multi-View Stereo Benchmark with
 High-Resolution Images and Multi-Camera Videos*, CVPR 2017.

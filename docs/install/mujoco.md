@@ -92,7 +92,7 @@ It does not load any capture replay table. The bundled tiny `nominal.json` is
 regenerated from `cargo run --example export_isaac_model`; keep it byte-identical
 to the Isaac model after updating the Rust source.
 
-Eight native regressions cover optical fixtures, analytic distances, moving
+Nine native regressions cover optical fixtures, analytic distances, moving
 mounted poses, chunk/stride consistency, timing, group filtering, near
 occlusion, validation and dynamics-time/qpos preservation. The direction-only
 cross-language comparisons tolerate floating-point differences, not hardware

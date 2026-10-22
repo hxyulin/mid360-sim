@@ -55,6 +55,48 @@ convention as the geometry. Disabling Isaac USD writeback is appropriate only
 with a synchronized native/caller-owned pose source; it is not a safe blanket
 optimization for USD-mounted sensors or rendering.
 
+## High speed, acceleration and mounted sensors
+
+We interpolate **poses**, then intersect rays at their emission times; we do not
+SLERP point clouds or deskew the output in advance. Linear position plus
+shortest-arc quaternion SLERP is exact for constant translational velocity and
+constant rotation about a fixed axis within a segment. High speed alone does
+not require a higher-order interpolator; acceleration, curved mount motion,
+collisions and inconsistent timestamps are the harder cases.
+
+For smooth translation with acceleration magnitude bounded by `a`, the maximum
+linear interpolation position error is bounded by `a * dt² / 8`. A sensor at
+lever arm `l` from a fixed rotation center follows an arc: interpolating only
+its world endpoint positions introduces a midpoint chord error
+`l * (1 - cos(omega * dt / 2))`, approximately `l * omega² * dt² / 8`.
+Interpolating the body pose and then applying the fixed sensor extrinsic avoids
+that chord approximation for constant-axis rotation. The current APIs take
+sensor endpoint poses; they do not automatically perform body/extrinsic-aware
+interpolation.
+
+A timestamp offset introduces first-order position error approximately
+`speed * offset` and angular error approximately `angular_speed * offset`.
+At 10 m, 10 rad/s and a 100 µs offset, the angular term alone corresponds to
+about 10 mm lateral ray displacement. This is not a range-error bound: grazing
+surfaces and changing nearest hits can amplify the range difference.
+
+Prefer, in order:
+
+1. Coherent pose/geometry timestamps and correct mounted extrinsics.
+2. Denser sensor pose segments where acceleration or rotation demands them;
+   keep acquisition resolution independent of output/readback batching.
+3. Shorter dynamic-geometry capture intervals when object motion matters.
+4. Velocity-aware translation interpolation when trusted endpoint velocities
+   are available. Cubic Hermite can improve smooth accelerated motion, but
+   estimating derivatives from sparse noisy poses can overshoot; it is not
+   currently a selectable adapter mode. Quaternion SLERP also needs shorter
+   segments when angular velocity changes.
+
+MuJoCo's `origin_tolerance_m` controls a separate translation-origin grouping
+approximation. Tightening it can increase native ray-call count without fixing
+pose-sample timing or changing geometry history. No interpolation recovers
+unobserved motion between sparse ground-truth samples, or missing scene geometry.
+
 ## What the tests establish
 
 The [recorded-return comparison](../motion-comparison-results.md) isolates pose

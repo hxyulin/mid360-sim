@@ -32,84 +32,113 @@
     ],
     "maximum_edge_m": 0.06,
     "range_filter_m": 20,
-    "train": "scan1 filtered indices i%5 != 0",
+    "train": "both scans: filtered indices i%5 != 0",
+    "validation": "both scans: filtered indices i%5 == 0",
+    "merge_max_distance_m": 0.005,
+    "merge_min_normal_dot": 0.95,
     "evaluation_rays_per_view": 200000,
-    "scan2_used_for_geometry": false,
+    "scan2_used_for_geometry": true,
+    "free_space_pruning": false,
     "hole_filling": false
   },
+  "splits": {
+    "scan1": {
+      "filtered_points": 24130116,
+      "training_points": 19304092,
+      "reserved_points": 4826024,
+      "sampled_validation_points": 200000,
+      "training_mask_sha256": "fc3ed296922249a662141d36aca8b6758223438aca2995761003c67c0c978f30",
+      "validation_indices_sha256": "81a5cd9ad9d7e2bdf6a036a62d699c0371e47d149af2228f21aee528b5766f3a"
+    },
+    "scan2": {
+      "filtered_points": 24463097,
+      "training_points": 19570477,
+      "reserved_points": 4892620,
+      "sampled_validation_points": 200000,
+      "training_mask_sha256": "f065a77e597be3dfa5294770cf777aeecba5d256b04b73716b9760702d072827",
+      "validation_indices_sha256": "d5cbbf31951e7b2416e38edb05ccf7f0e4a5d244d3a443aff72412f2837b8e26"
+    }
+  },
+  "fusion": {
+    "reference_representatives": 821926,
+    "additional_representatives": 795367,
+    "merged_additional_representatives": 593399,
+    "fused_representatives": 1023894
+  },
   "geometry": {
-    "vertices": 772989,
-    "triangles": 1518491
+    "vertices": 948293,
+    "triangles": 1864268
   },
   "evaluation": {
-    "same_view": {
+    "scan1_heldout": {
       "rays": 200000,
-      "hit_fraction": 0.991495,
-      "within_20mm_fraction": 0.99032,
-      "early_over_20mm_fraction": 0.00077,
-      "late_over_20mm_fraction": 0.000405,
-      "median_mm": 0.2736205794506841,
-      "p95_mm": 1.8180650401163618,
-      "rms_mm": 9.985509849650054
+      "hit_fraction": 0.995745,
+      "within_20mm_fraction": 0.992595,
+      "early_over_20mm_fraction": 0.001205,
+      "late_over_20mm_fraction": 0.001945,
+      "median_mm": 0.45882984067713295,
+      "p95_mm": 2.3456518291004254,
+      "rms_mm": 38.196488171629746
     },
-    "withheld_viewpoint": {
+    "scan2_heldout": {
       "rays": 200000,
-      "hit_fraction": 0.87312,
-      "within_20mm_fraction": 0.86,
-      "early_over_20mm_fraction": 0.0009,
-      "late_over_20mm_fraction": 0.01222,
-      "median_mm": 0.7716854601086398,
-      "p95_mm": 3.2883815857452228,
-      "rms_mm": 114.47748904035248
+      "hit_fraction": 0.995745,
+      "within_20mm_fraction": 0.99235,
+      "early_over_20mm_fraction": 0.001695,
+      "late_over_20mm_fraction": 0.0017,
+      "median_mm": 0.44917492313123475,
+      "p95_mm": 2.1252138387550317,
+      "rms_mm": 43.628057867632194
     }
   },
   "native": {
     "backend": "production mid360_sim.mujoco.MujocoSensor / mj_multiRay",
     "mujoco_version": "3.7.0",
-    "compile_s": 1.2654009589459747,
+    "compile_s": 4.784371874993667,
     "measured_ray_replay": {
-      "same_view": {
+      "scan1_heldout": {
         "rays": 200000,
-        "hit_fraction": 0.991495,
-        "within_20mm_fraction": 0.99032,
-        "early_over_20mm_fraction": 0.00077,
-        "late_over_20mm_fraction": 0.000405,
-        "median_mm": 0.2735661659254429,
-        "p95_mm": 1.8188123175181912,
-        "rms_mm": 9.985518091971247
+        "hit_fraction": 0.995745,
+        "within_20mm_fraction": 0.9926,
+        "early_over_20mm_fraction": 0.001205,
+        "late_over_20mm_fraction": 0.00194,
+        "median_mm": 0.45896774882603353,
+        "p95_mm": 2.3452140262671017,
+        "rms_mm": 38.07917072845034
       },
-      "withheld_viewpoint": {
+      "scan2_heldout": {
         "rays": 200000,
-        "hit_fraction": 0.873115,
-        "within_20mm_fraction": 0.859995,
-        "early_over_20mm_fraction": 0.0009,
-        "late_over_20mm_fraction": 0.01222,
-        "median_mm": 0.7716188723150275,
-        "p95_mm": 3.2874920872405955,
-        "rms_mm": 114.4778090329662
+        "hit_fraction": 0.995745,
+        "within_20mm_fraction": 0.99235,
+        "early_over_20mm_fraction": 0.001695,
+        "late_over_20mm_fraction": 0.0017,
+        "median_mm": 0.4492297419078639,
+        "p95_mm": 2.1253723484732308,
+        "rms_mm": 43.628048082679356
       }
     },
     "nominal": {
       "emissions": 2000000,
       "simulated_s": 10,
-      "acquisition_wall_s": 2.189751167083159,
-      "realtime_factor": 4.566728928072874,
-      "valid_fraction": 0.8481615,
+      "acquisition_wall_s": 7.2701610419899225,
+      "realtime_factor": 1.3754853492575305,
+      "valid_fraction": 0.8788575,
       "mount": "scan2 source pose",
       "phase_matched": false
     },
     "scope": "Stationary virtual MID360 in Faro-derived geometry; not hardware MID360 returns. Timing excludes compilation, rendering, physics stepping and publication."
   },
   "adapter_sha256": {
-    "mujoco.py": "2e18a943f9f39f593d3961d45ed637827a0753bbd34cd28d32c2a68c0ac40e1a",
+    "mujoco.py": "8544a2b84fa602bb86c7322ca6b39516fe1dde4a75acad6a7870ff8436799a45",
     "pattern.py": "605dd63388b056091b9b98916d6f84b5596bd510d5cfbcb4b5126cb91387eeb3",
     "nominal.json": "d6f72e21a5e318446c2ec737e890beb5a90dff436ec48aed5319beb281d53175"
   },
-  "elapsed_s": 24.606583750108257,
+  "elapsed_s": 130.24898966704495,
   "caveats": [
     "Faro scene reconstruction accuracy, not a calibrated MID360 comparison.",
     "Range errors conditional on hits; coverage includes misses.",
-    "Only scan1 builds the exported/simulated mesh; scan2 remains withheld.",
+    "Both views build geometry; excluded points do not test unseen-view generalization.",
+    "Remaining errors are not semantically classified as windows or infinite ranges.",
     "No motion, material-response, dropout or real device phase validation."
   ]
 }

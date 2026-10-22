@@ -228,6 +228,20 @@ try:
         traced.timestamps_ns, np.concatenate([p.timestamps_ns for p in expected_parts])
     )
     assert static.flush() is None
+    retained_ranges, retained_directions = (
+        traced.ranges_m.copy(),
+        traced.directions.copy(),
+    )
+    # Alternating larger/smaller batches must not expose capacity tails or
+    # overwrite a caller's retained host frame when device buffers are reused.
+    for count in (3, 22000, 7):
+        static.scan(0, count, pose)
+        current = static.flush()
+        reference = sensor.scan(0, count, pose)
+        assert len(current.ranges_m) == count
+        np.testing.assert_array_equal(current.ranges_m, reference.ranges_m)
+        np.testing.assert_array_equal(traced.ranges_m, retained_ranges)
+        np.testing.assert_array_equal(traced.directions, retained_directions)
 
     # The GPU subinterval path agrees with explicit CPU endpoint interpolation.
     def interpolate_pose(a, b, fraction):

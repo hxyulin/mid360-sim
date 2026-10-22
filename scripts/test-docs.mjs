@@ -35,11 +35,14 @@ try {
   await page.keyboard.press('Escape');
   await page.goto(origin + 'guide/scanned-geometry.html');
   await page.getByRole('heading', { name: 'Turn public scans into a LiDAR scene', level: 1 }).waitFor();
-  assert.equal(await page.locator('main img').count(), 3);
+  assert.equal(await page.locator('main img').count(), 4);
   await page.waitForFunction(() => [...document.querySelectorAll('main img')].every(img => img.complete && img.naturalWidth > 0));
   const sceneReport = await page.request.get(origin + 'eth3d/report.json');
   assert(sceneReport.ok(), 'ETH3D report is unavailable');
-  assert.equal((await sceneReport.json()).settings.scan2_used_for_geometry, false);
+  const report = await sceneReport.json();
+  assert.equal(report.settings.scan2_used_for_geometry, true);
+  assert.equal(report.settings.validation, 'both scans: filtered indices i%5 == 0');
+  assert(report.evaluation.scan1_heldout && report.evaluation.scan2_heldout);
   await mkdir('local-assets/docs-review', { recursive: true });
   await page.goto(origin);
   await page.screenshot({ path: 'local-assets/docs-review/desktop.png', fullPage: true });

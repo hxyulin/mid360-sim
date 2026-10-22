@@ -31,7 +31,11 @@ an NVIDIA MID-360 preset or radar**. Each native direction is evaluated against
 its own corresponding reference intersection. Different distributions make
 these policy comparisons, not identical-ray microbenchmarks.
 
-## Results
+## Cross-backend baseline results
+
+These are the original matched-room measurements, before the allocation-focused
+follow-up below. That follow-up remeasures selected paths; the entire
+cross-backend matrix has not been rerun after those changes.
 
 RTF is simulated seconds / wall seconds; higher is faster. Wall time is the
 median of three trials except RTX (one complete native replay per rate).
@@ -103,6 +107,155 @@ bounds origin approximation, **not range error** at grazing incidence. It
 reduces this sample's RMS by about 19× for 58% more runtime than held acquisition.
 Moving obstacle geometry is still the current `mjData` for that call.
 
+## Follow-up: allocation cost and denser poses
+
+The next pass preserves the existing sensor motion model and acquisition times:
+
+- MuJoCo expands quaternion vector rotation component-wise, avoiding temporary
+  `np.cross` arrays and axis-handling overhead. Five alternating before/after
+  replays on the Ryzen 9 9950X3D reduced median wall time from **237.19 to
+  217.51 ms (8.3%)** for the same 400,000 emissions. Hit masks were identical;
+  maximum range difference was 1.07e-14 m. A separate Apple CPU run improved
+  by 8.0%. These include native pose updates, queries and owned range arrays,
+  not integrated dynamics, rendering, XYZ publication or transport.
+- Isaac static tracing now reuses bounded GPU output allocations. Seven
+  alternating RTX 5090 microbenchmark replays measured **7.067 to 6.954 ms
+  (1.6%)** per 400,000 rays, with identical output. This includes bulk history
+  acquisition and owned range readback, but excludes physics, XYZ sinks,
+  rendering and publication. The small gain is not a whole-simulation claim.
+  One full replay per mode warmed the GPU paths before timing. Growing and
+  shrinking batches retain owned host frames and expose no capacity tail.
+
+For accuracy, shorter pose intervals reduce interpolation error in the same
+MoCap reference; a tighter MuJoCo origin tolerance reduces a separate
+approximation. The following uses the optimized rolling code, identical
+400,000 emission times, and the reference's original measured-pose interpolation:
+
+| Pose interval | Origin tolerance | Range RMS | Wall time / 2 simulated seconds |
+|---|---:|---:|---:|
+| 1 ms | 0.5 mm | 0.294 mm | 217.51 ms, five-run median |
+| 1 ms | 0.05 mm | 0.252 mm | 300.44 ms, single run |
+| 0.2 ms | 0.5 mm | 0.0454 mm | 692.10 ms, single run |
+| 0.2 ms | 0.05 mm | 0.0276 mm | 734.50 ms, single run |
+
+The denser modes execute five times as many pose-update/query calls; native
+robot dynamics are not integrated in this runner. These tiny residuals are
+**agreement with an interpolated reference**, not evidence of corresponding
+hardware precision or new 5 kHz ground-truth measurements. The chosen recording
+is a changing-motion stress sample, not a general high-speed accuracy bound.
+For the larger accuracy factors—timestamp alignment, acceleration and mounted
+extrinsics—see [high-speed acquisition](guide/acquisition.md#high-speed-acceleration-and-mounted-sensors).
+
+Reproduce accuracy settings with `check-backend-ground-truth.py prepare
+--step-us 200`, then `mujoco --rolling --origin-tolerance-m 0.00005` using the
+matching fixture. Compare each output with `evaluate --backend mujoco`; keep
+step duration and original per-emission reference paired. The before/after
+allocation probes alternate current code against source revision `11a4673`.
+Ignored evidence is `local-assets/perf-followup/linux-mujoco-results.json`,
+`gpu-results.json` and `accuracy-*.evaluation.json`. Regression checks include
+native per-ray rotation at small/near-half turns, output ownership and both
+Isaac hybrid union paths. No scanning or physics-rate defaults were changed.
+
+## Further pass: packed metadata and the actual arena loop
+
+Profiling the static bulk-history path found five small metadata allocations/
+uploads per flush: counts, offsets, endpoint poses and interpolation fractions.
+A [Warp structured record](https://nvidia.github.io/warp/v1.17/user_guide/runtime.html#structured-arrays)
+now carries these in one upload. The rigid-object path
+shares that record and fuses static/moving nearest-hit queries into one kernel,
+so each emission's sensor pose is interpolated once. Ray counts, per-point times,
+scene capture intervals and minimum-range occlusion remain unchanged.
+
+On the same Linux Ryzen 9 9950X3D / RTX 5090 system, seven alternating trials
+against the previous buffer-reuse implementation gave:
+
+| Acquisition workload, 400,000 rays | Before | After | Wall-time reduction |
+|---|---:|---:|---:|
+| Static room, bulk history and owned range readback | 6.860 ms | 5.953 ms | 13.2% |
+| Room with eight moving cubes, per-step USD edits/captures and readback | 1.3156 s | 1.2952 s | 1.6% |
+
+Static outputs were identical. Moving outputs retained identical hit/miss masks;
+maximum range difference was 2.86e-6 m (float32 rounding). Neither timer includes
+physics integration, rendering, XYZ packaging or transport. CPU pose authoring/
+capture dominates the moving-cube workload; the static gain does not transfer
+as a fixed percentage to moving scenes.
+
+A full-arena code-only pair with eight moving CAD roots was essentially flat:
+1.674 versus 1.685 s for two simulated seconds. This is not evidence of a
+whole-simulation speedup from the kernel changes. Physics-only stepping in those
+runs already cost approximately 1.15 s. A separate CPU profile also exposed
+repeated SDK timestep/scene lookup and USD event-processing overhead.
+
+### Opt-in caller-owned headless stepping
+
+The arena harness now compares public SDK stepping choices with explicit worker
+counts. The tested scene has 355,542 static triangles and eight neutral CAD
+robots with 222,900 triangles each. These have free moving roots, not wheel,
+contact or articulated dynamics. USD writeback stays enabled in every row:
+
+| Physics workers / SDK call pattern | Wall time / 2 simulated seconds | RTF |
+|---|---:|---:|
+| 8 workers, `SimulationContext.step` once per tick | 1.636 s | 1.223× |
+| 0 workers, `SimulationContext.step` once per tick | 1.111 s | 1.800× |
+| 0 workers, `SimulationManager.step(steps=100, callback=...)` | 0.990 s | 2.021× |
+
+These are **single native runs per configuration**, not statistical guarantees.
+The tuned row used 39.5% less wall time than the explicit eight-worker row.
+Worker count zero executes PhysX synchronously; it is workload-specific and
+may be worse for complex contact/joint worlds.
+
+`steps=100` means **100 separate 1 ms integrations**, not one 100 ms physics
+step. Every PhysX/LiDAR callback still runs, and the supplied SDK callback runs
+after each individual step. All three configurations produced 20 frames,
+400,000 scheduled ranges, 88,668 valid returns and **the same complete range
+SHA-256**. A separate 5,000-ray check retained identical hit/miss masks against
+combined geometry, with maximum range difference 1.43e-6 m and 24 robot-occluded
+returns. The shared MoCap room replay also retains 0.251334 mm RMS against its
+original reference.
+
+This is an opt-in headless caller loop, not a change to sensor or Isaac defaults.
+Controllers/input processing must stay in per-step callbacks if they require
+1 kHz interaction; processing commands only between 100-step calls changes
+control latency. Render scheduling, Fabric updates and graphical timeline tasks
+need their own integration. Do not advance physics from inside a sensor callback.
+The sensor adapter remains passive and owns no dynamics loop.
+
+### Reproduce these probes
+
+Run the source comparison with an external earlier `backend.py` and adjacent
+`nominal.json`; the test alternates both implementations in the same process
+and warms each with one replay before timing:
+
+```sh
+./python.sh /path/mid360-sim/integrations/isaac-sim/tests/history_benchmark.py \
+  --input /tmp/mocap-fixture.npz --baseline /tmp/baseline/backend.py \
+  --mode static --output /tmp/history-static.json
+```
+
+Use `--mode rigid --objects 8` for moving sources. For the arena, prepare the
+caller-owned geometry using the [CAD benchmark instructions](isaac-performance.md#caller-owned-arena-cad-robot-benchmark), then run:
+
+```sh
+./python.sh /path/mid360-sim/integrations/isaac-sim/tests/arena.py \
+  --input /tmp/arena.npz --mode rigid --robots 8 --steps 2000 --verify \
+  --physics-threads 0 --physics-driver manager --physics-batch-steps 100 \
+  --output /tmp/arena-manager.json
+```
+
+Compare `--physics-driver context --physics-batch-steps 1` with explicit
+`--physics-threads 8` or `0`. `--backend-file` selects an external acquisition
+implementation while preserving the scene/extension workload. `--profile-cpu`
+writes a separate profile and labels its timings as profiled; do not mix them
+with ordinary throughput numbers. The reports record backend checksums.
+Ignored evidence is under `local-assets/perf-pass2/`: `pass2-history-*.json`,
+`pass2-arena-final-*.json`, `pass2-arena-profile.profile.txt` and
+`ground-truth-evaluation.json`.
+
+The next likely gains are coherent native/bulk pose capture and reducing SDK/
+USD bookkeeping. A GPU-resident downstream consumer could avoid readback, but
+that alone does not speed up a ROS pipeline that needs CPU message data. No
+public GPU-frame API, CUDA-graph mode or new physics-rate default is introduced.
+
 ## Reproduce and inspect
 
 Prepare the [shared fixture](backend-ground-truth.md), preserving its source
@@ -136,7 +289,8 @@ Local ignored evidence: `local-assets/realtime/pareto-warp-native.timing.json`,
 `reproduction-gt.json`. Source/algorithm tests are committed with the harness code;
 generated captures and installed simulator runtimes remain outside releases.
 
-The next useful proof is a matched moving-robot scene with native pose access,
-self-occlusion and optical partition updates, including publication costs.
+Further proof needs articulated/contact-driven robots with coherent native pose
+access, self-occlusion and optical partition updates, including transport costs.
+The CAD-root stepping probes above do not cover those dynamics.
 Current results support the headless static-scene path; they do not establish
 that every backend beats official on both fronts.

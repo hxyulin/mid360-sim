@@ -18,6 +18,7 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 import open3d as o3d
+from scipy.spatial import cKDTree
 
 REVISION = "fb2ddc77390926c335c48dace97533f519fdd571"
 FILES = {
@@ -104,13 +105,76 @@ def load_scan(path, transform):
     return placed[keep], np.asarray(cloud.colors)[keep]
 
 
-def reconstruct(points, colors, origin):
-    """Fit only observed surfaces; no global watertight completion."""
+def split_indices(count, samples, rng):
+    """Reserve every fifth filtered point before processing either view.
+
+    Return a training mask and sampled validation indices. Unselected validation
+    points also remain excluded from geometry; no viewpoint is wholly withheld.
+    """
+    if count <= 0 or samples <= 0:
+        raise ValueError("Positive point and sample counts required")
+    train = np.arange(count) % 5 != 0
+    reserved = np.flatnonzero(~train)
+    if samples > len(reserved):
+        raise ValueError("Not enough reserved points for the requested sample")
+    return train, rng.choice(reserved, samples, replace=False)
+
+
+def prepare_cloud(points, colors, origin):
+    """Voxelize one training view and orient normals toward its scanner origin."""
     cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(points))
     cloud.colors = o3d.utility.Vector3dVector(colors)
     cloud = cloud.voxel_down_sample(0.01)
     cloud.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.04, max_nn=32))
     cloud.orient_normals_towards_camera_location(origin)
+    return cloud
+
+
+def fuse_clouds(reference, additional):
+    """Merge nearby, normal-compatible representatives before joint meshing.
+
+    A 5 mm proximity and normal dot >=0.95 are reconstruction heuristics.
+    Incompatible/opposing surfaces stay separate. Multiple additional points
+    assigned to one reference are averaged as one group, independent of order.
+    Inputs retain their original positions, colours and source-oriented normals.
+    """
+    p1, p2 = np.asarray(reference.points), np.asarray(additional.points)
+    n1, n2 = np.asarray(reference.normals), np.asarray(additional.normals)
+    if not len(p1) or not len(p2):
+        raise ValueError("Two nonempty prepared clouds required")
+    distance, nearest = cKDTree(p1).query(p2)
+    merge = (distance <= 0.005) & (np.einsum("ij,ij->i", n2, n1[nearest]) >= 0.95)
+    counts = 1 + np.bincount(nearest[merge], minlength=len(p1))
+    fused = o3d.geometry.PointCloud()
+    for attribute in ("points", "normals", "colors"):
+        first = np.asarray(getattr(reference, attribute))
+        second = np.asarray(getattr(additional, attribute))
+        average = np.column_stack(
+            [
+                (
+                    first[:, j]
+                    + np.bincount(
+                        nearest[merge], weights=second[merge, j], minlength=len(p1)
+                    )
+                )
+                / counts
+                for j in range(3)
+            ]
+        )
+        values = np.concatenate([average, second[~merge]])
+        if attribute == "normals":
+            values /= np.maximum(np.linalg.norm(values, axis=1)[:, None], 1e-15)
+        setattr(fused, attribute, o3d.utility.Vector3dVector(values))
+    return fused, dict(
+        reference_representatives=len(p1),
+        additional_representatives=len(p2),
+        merged_additional_representatives=int(merge.sum()),
+        fused_representatives=len(fused.points),
+    )
+
+
+def reconstruct(cloud):
+    """Mesh the fused training cloud without hole filling or free-space pruning."""
     mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
         cloud, o3d.utility.DoubleVector([0.015, 0.025, 0.04])
     )
@@ -251,6 +315,96 @@ def preview_rays(origin, width=1200, height=800):
     )
 
 
+def range_panorama(scene, test, output):
+    """Show reference, reconstruction, residuals and misses on identical rays."""
+    import matplotlib.pyplot as plt
+    from PIL import Image
+
+    name, points, origin = test
+    ranges, truth = query(scene, points, origin)
+    delta = points - origin
+    azimuth = np.degrees(np.arctan2(delta[:, 1], delta[:, 0]))
+    elevation = np.degrees(
+        np.arctan2(delta[:, 2], np.linalg.norm(delta[:, :2], axis=1))
+    )
+    x = np.floor((azimuth + 180) / 2).astype(int) % 180
+    y = np.floor((elevation + 60) / 2).astype(int)
+    inside = (y >= 0) & (y < 70)
+    cells = y * 180 + x
+    counts = np.bincount(cells[inside], minlength=12600).reshape(70, 180)
+
+    def median(values, selected):
+        result = np.full(12600, np.nan)
+        selected = inside & selected
+        order = np.argsort(cells[selected])
+        ids, values = cells[selected][order], values[selected][order]
+        keys, starts, sizes = np.unique(ids, return_index=True, return_counts=True)
+        for key, start, size in zip(keys, starts, sizes):
+            result[key] = np.median(values[start : start + size])
+        return np.where(counts >= 2, result.reshape(70, 180), np.nan)
+
+    hit = np.isfinite(ranges)
+    missing = np.bincount(cells[inside & ~hit], minlength=12600).reshape(70, 180)
+    missing = np.where(counts >= 2, missing / np.maximum(counts, 1) * 100, np.nan)
+    panels = [
+        (
+            median(truth, np.ones(len(truth), bool)),
+            "turbo",
+            10,
+            "Held-out Faro reference",
+            "Range (m)",
+        ),
+        (
+            median(ranges, hit),
+            "turbo",
+            10,
+            "Joint two-view reconstruction",
+            "Range (m)",
+        ),
+        (
+            median(np.abs(ranges - truth) * 1000, hit),
+            "magma",
+            100,
+            "Median absolute per-ray error · hits only",
+            "Error (mm)",
+        ),
+        (
+            missing,
+            "magma",
+            100,
+            "Missing first intersections · all reference rays",
+            "Missing (%)",
+        ),
+    ]
+    fig, axes = plt.subplots(4, 1, figsize=(12, 9), layout="constrained")
+    for ax, (values, cmap, limit, title, label) in zip(axes, panels):
+        colors = plt.colormaps[cmap].copy()
+        colors.set_bad("#d7dce1")
+        image = ax.imshow(
+            values,
+            origin="lower",
+            extent=(-180, 180, -60, 80),
+            aspect="auto",
+            cmap=colors,
+            vmin=0,
+            vmax=limit,
+        )
+        ax.set(
+            title=title, xlabel="World-relative azimuth (deg)", ylabel="Elevation (deg)"
+        )
+        fig.colorbar(image, ax=ax, fraction=0.02, pad=0.01, label=label)
+    fig.suptitle(name.replace("_", " ") + " · identical measured rays")
+    fig.supxlabel(
+        "2° bins, at least two reference returns/bin; grey = insufficient support. ETH3D Office · Schöps et al., CVPR 2017 · CC BY-NC-SA 4.0.",
+        fontsize=8,
+    )
+    fig.savefig(output / "range-panorama.png", dpi=160)
+    plt.close(fig)
+    Image.open(output / "range-panorama.png").save(
+        output / "range-panorama.webp", quality=90
+    )
+
+
 def figures(scene, mesh, tests, output):
     """Write attributed geometry and miss-aware CDF figures, without source RGB."""
     import matplotlib
@@ -286,6 +440,7 @@ def figures(scene, mesh, tests, output):
         "\n".join(line.rstrip() for line in svg.read_text().splitlines()) + "\n"
     )
     plt.close(fig)
+    range_panorama(scene, tests[1], output)
     origin = tests[0][2]
     image = preview_rays(origin)
     hit = scene.cast_rays(image)
@@ -303,7 +458,7 @@ def figures(scene, mesh, tests, output):
     scan = np.load(output / "nominal-scan.npz")
     valid = scan["ranges_m"] >= 0
     simulated = scan["directions"][valid] * scan["ranges_m"][valid, None]
-    # Re-express the independent Faro returns in the virtual mount's local frame.
+    # Re-express held-out Faro returns in the virtual mount's local frame.
     # The caller supplies the source pose through the saved mount rotation.
     rotation = np.load(output / "mount-rotation.npy")
     reference = np.einsum("ij,jk->ik", tests[1][1] - tests[1][2], rotation)
@@ -373,21 +528,27 @@ def main():
     transforms = load_transforms(args.data / "scan_alignment.mlp")
     started = time.perf_counter()
     rng = np.random.default_rng(SEED)
-    p, colors = load_scan(args.data / "scan1.ply", transforms["scan1.ply"])
-    origin = transforms["scan1.ply"][:3, 3]
-    train = np.arange(len(p)) % 5 != 0
-    # Split before voxelization, normal estimation or any evaluation.
-    mesh = reconstruct(p[train], colors[train], origin)
-    test1 = p[~train]
-    test1 = test1[rng.choice(len(test1), 200000, replace=False)]
-    del p, colors
-    p2, _ = load_scan(args.data / "scan2.ply", transforms["scan2.ply"])
-    test2 = p2[rng.choice(len(p2), 200000, replace=False)]
-    del p2
-    tests = [
-        ("same_view", test1, origin),
-        ("withheld_viewpoint", test2, transforms["scan2.ply"][:3, 3]),
-    ]
+    tests, clouds, splits = [], [], {}
+    for name in ("scan1", "scan2"):
+        pose = transforms[name + ".ply"]
+        points, colors = load_scan(args.data / (name + ".ply"), pose)
+        train, sample = split_indices(len(points), 200000, rng)
+        # Both views reserve points BEFORE voxelization, normals or fusion.
+        tests.append((name + "_heldout", points[sample], pose[:3, 3]))
+        clouds.append(prepare_cloud(points[train], colors[train], pose[:3, 3]))
+        splits[name] = dict(
+            filtered_points=len(points),
+            training_points=int(train.sum()),
+            reserved_points=int((~train).sum()),
+            sampled_validation_points=len(sample),
+            training_mask_sha256=hashlib.sha256(train.tobytes()).hexdigest(),
+            validation_indices_sha256=hashlib.sha256(sample.tobytes()).hexdigest(),
+        )
+        np.save(args.output / (name + "-validation-indices.npy"), sample)
+        del points, colors
+    cloud, fusion = fuse_clouds(*clouds)
+    mesh = reconstruct(cloud)
+    del cloud, clouds
     scene = optical_scene(mesh)
     results = {name: score(*query(scene, points, eye)) for name, points, eye in tests}
     o3d.io.write_triangle_mesh(str(args.output / "training-mesh.ply"), mesh)
@@ -420,11 +581,17 @@ def main():
             pivot_radii_m=[0.015, 0.025, 0.04],
             maximum_edge_m=0.06,
             range_filter_m=20,
-            train="scan1 filtered indices i%5 != 0",
+            train="both scans: filtered indices i%5 != 0",
+            validation="both scans: filtered indices i%5 == 0",
+            merge_max_distance_m=0.005,
+            merge_min_normal_dot=0.95,
             evaluation_rays_per_view=200000,
-            scan2_used_for_geometry=False,
+            scan2_used_for_geometry=True,
+            free_space_pruning=False,
             hole_filling=False,
         ),
+        splits=splits,
+        fusion=fusion,
         geometry=dict(vertices=len(mesh.vertices), triangles=len(mesh.triangles)),
         evaluation=results,
         native=native,
@@ -433,7 +600,8 @@ def main():
         caveats=[
             "Faro scene reconstruction accuracy, not a calibrated MID360 comparison.",
             "Range errors conditional on hits; coverage includes misses.",
-            "Only scan1 builds the exported/simulated mesh; scan2 remains withheld.",
+            "Both views build geometry; excluded points do not test unseen-view generalization.",
+            "Remaining errors are not semantically classified as windows or infinite ranges.",
             "No motion, material-response, dropout or real device phase validation.",
         ],
     )

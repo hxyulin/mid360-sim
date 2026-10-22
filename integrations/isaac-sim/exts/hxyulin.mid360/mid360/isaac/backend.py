@@ -104,15 +104,22 @@ def query_scan(
         ranges[output_offset + i] = result.t
 
 
+@wp.struct
+class _PoseSegment:
+    """One acquisition segment, packed for one CPU-to-GPU metadata transfer."""
+
+    count: int
+    offset: int
+    start: wp.transform
+    end: wp.transform
+    fraction: wp.vec2
+
+
 @wp.kernel
 def query_segments(
     first: wp.int64,
     stride: int,
-    counts: wp.array(dtype=wp.int32),
-    offsets: wp.array(dtype=wp.int32),
-    starts: wp.array(dtype=wp.transform),
-    ends: wp.array(dtype=wp.transform),
-    fractions: wp.array(dtype=wp.vec2),
+    segments: wp.array(dtype=_PoseSegment),
     terms: wp.array(dtype=wp.int32),
     coefficients: wp.array(dtype=wp.float32),
     mesh: wp.uint64,
@@ -122,25 +129,26 @@ def query_segments(
     ranges: wp.array(dtype=wp.float32),
 ):
     i, segment = wp.tid()
-    if i < counts[segment]:
-        output = offsets[segment] + i
+    record = segments[segment]
+    if i < record.count:
+        output = record.offset + i
         d = nominal_direction(
             first + wp.int64(output) * wp.int64(stride), terms, coefficients
         )
         directions[output] = d
         fraction = wp.lerp(
-            fractions[segment][0],
-            fractions[segment][1],
-            float(i) / float(wp.max(counts[segment] - 1, 1)),
+            record.fraction[0],
+            record.fraction[1],
+            float(i) / float(wp.max(record.count - 1, 1)),
         )
         position = wp.lerp(
-            wp.transform_get_translation(starts[segment]),
-            wp.transform_get_translation(ends[segment]),
+            wp.transform_get_translation(record.start),
+            wp.transform_get_translation(record.end),
             fraction,
         )
         rotation = wp.quat_slerp(
-            wp.transform_get_rotation(starts[segment]),
-            wp.transform_get_rotation(ends[segment]),
+            wp.transform_get_rotation(record.start),
+            wp.transform_get_rotation(record.end),
             fraction,
         )
         result = wp.mesh_query_ray(
@@ -170,11 +178,12 @@ def merge_nearest_ranges(
 
 @wp.kernel
 def query_rigid_history(
-    counts: wp.array(dtype=wp.int32),
-    offsets: wp.array(dtype=wp.int32),
-    starts: wp.array(dtype=wp.transform),
-    ends: wp.array(dtype=wp.transform),
-    fractions: wp.array(dtype=wp.vec2),
+    first: wp.int64,
+    stride: int,
+    terms: wp.array(dtype=wp.int32),
+    coefficients: wp.array(dtype=wp.float32),
+    static_mesh: wp.uint64,
+    segments: wp.array(dtype=_PoseSegment),
     inverse_history: wp.array(dtype=wp.mat44),
     mesh_ids: wp.array(dtype=wp.uint64),
     object_count: int,
@@ -184,25 +193,33 @@ def query_rigid_history(
     ranges: wp.array(dtype=wp.float32),
 ):
     i, segment = wp.tid()
-    if i < counts[segment]:
-        output = offsets[segment] + i
+    record = segments[segment]
+    if i < record.count:
+        output = record.offset + i
         fraction = wp.lerp(
-            fractions[segment][0],
-            fractions[segment][1],
-            float(i) / float(wp.max(counts[segment] - 1, 1)),
+            record.fraction[0],
+            record.fraction[1],
+            float(i) / float(wp.max(record.count - 1, 1)),
         )
         position = wp.lerp(
-            wp.transform_get_translation(starts[segment]),
-            wp.transform_get_translation(ends[segment]),
+            wp.transform_get_translation(record.start),
+            wp.transform_get_translation(record.end),
             fraction,
         )
         rotation = wp.quat_slerp(
-            wp.transform_get_rotation(starts[segment]),
-            wp.transform_get_rotation(ends[segment]),
+            wp.transform_get_rotation(record.start),
+            wp.transform_get_rotation(record.end),
             fraction,
         )
-        direction = wp.quat_rotate(rotation, directions[output])
-        nearest = ranges[output]
+        local = nominal_direction(
+            first + wp.int64(output) * wp.int64(stride), terms, coefficients
+        )
+        directions[output] = local
+        direction = wp.quat_rotate(rotation, local)
+        static_hit = wp.mesh_query_ray(static_mesh, position, direction, max_range)
+        nearest = float(-1.0)
+        if static_hit.result:
+            nearest = static_hit.t
         # A static hit below min range already blocks everything behind it.
         if nearest < 0.0 or nearest >= min_range:
             for obj in range(object_count):
@@ -688,6 +705,7 @@ class StaticSceneBatch:
         self.segments = []
         self.count = 0
         self.history = None
+        self.capacity = 0
 
     def scan(
         self,
@@ -825,8 +843,12 @@ class StaticSceneBatch:
         frame = self._drain_device()
         return None if frame is None else _host_frame(*frame)
 
-    def _drain_device(self):
-        """Trace pending segments and return owned GPU arrays for immediate use."""
+    def _drain_device(self, trace=True):
+        """Prepare outputs, optionally trace; borrow until the next batch.
+
+        The rigid union path sets trace=False and fills both outputs in its
+        fused kernel before any host readback. Public flush always traces.
+        """
         if not self.segments and self.history is None:
             return None
         sensor = self.sensor
@@ -844,30 +866,43 @@ class StaticSceneBatch:
                 [(*s[2][0], *s[2][1]) for s in self.segments], dtype=np.float32
             )
             fractions = np.array([s[3] for s in self.segments], dtype=np.float32)
-        offsets = np.r_[0, np.cumsum(counts[:-1])].astype(np.int32)
-        directions = wp.empty(self.count, dtype=wp.vec3, device=sensor.device)
-        ranges = wp.empty(self.count, dtype=wp.float32, device=sensor.device)
-        wp.launch(
-            query_segments,
-            dim=(int(counts.max()), len(counts)),
-            inputs=[
-                wp.int64(self.first),
-                self.stride,
-                wp.array(counts, dtype=wp.int32, device=sensor.device),
-                wp.array(offsets, dtype=wp.int32, device=sensor.device),
-                wp.array(starts, dtype=wp.transform, device=sensor.device),
-                wp.array(ends, dtype=wp.transform, device=sensor.device),
-                wp.array(fractions, dtype=wp.vec2, device=sensor.device),
-                sensor.terms,
-                sensor.coefficients,
-                sensor.mesh.id,
-                sensor.min_range_m,
-                sensor.max_range_m,
-                directions,
-                ranges,
-            ],
-            device=sensor.device,
+        # One structured allocation/upload replaces five small transfers. The
+        # moving-object pass consumes this same immutable device metadata.
+        packed = np.empty(len(counts), dtype=_PoseSegment.numpy_dtype())
+        packed["count"] = counts
+        packed["offset"][0] = 0
+        np.cumsum(counts[:-1], out=packed["offset"][1:])
+        packed["start"], packed["end"], packed["fraction"] = starts, ends, fractions
+        self._device_segments = wp.array(
+            packed, dtype=_PoseSegment, device=sensor.device
         )
+        if self.count > self.capacity:
+            self.capacity = max(self.count, min(200000, self.capacity * 2))
+            self.directions = wp.empty(
+                self.capacity, dtype=wp.vec3, device=sensor.device
+            )
+            self.ranges = wp.empty(
+                self.capacity, dtype=wp.float32, device=sensor.device
+            )
+        directions, ranges = self.directions[: self.count], self.ranges[: self.count]
+        if trace:
+            wp.launch(
+                query_segments,
+                dim=(int(counts.max()), len(counts)),
+                inputs=[
+                    wp.int64(self.first),
+                    self.stride,
+                    self._device_segments,
+                    sensor.terms,
+                    sensor.coefficients,
+                    sensor.mesh.id,
+                    sensor.min_range_m,
+                    sensor.max_range_m,
+                    directions,
+                    ranges,
+                ],
+                device=sensor.device,
+            )
         frame = (self.first, self.stride, self.epoch, directions, ranges)
         self.segments.clear()
         self.history = None
@@ -991,7 +1026,9 @@ class RigidHybridSensor(HybridSensor):
     Each moving source mesh has a fixed local-space BVH. scan() records its
     inverse world matrix; flush() transforms rays into each object's captured
     local frame. This retains ordinary step-frozen moving geometry without
-    per-step GPU launches or BVH refits. Affine nonuniform scale is supported.
+    per-step GPU launches or BVH refits. Static and moving nearest-hit queries
+    share one kernel and one sensor-pose interpolation per emission. Affine
+    nonuniform scale is supported.
     Source meshes must remain undeformed and topology must stay fixed; rebuild
     after edits, as with the ordinary backend. At most 128 moving source meshes
     and 100 step captures may be pending. This is opt-in and caller-partitioned.
@@ -1087,25 +1124,21 @@ class RigidHybridSensor(HybridSensor):
             return None
         try:
             segments = list(self.static.segments)
-            frame = self.static._drain_device()
+            frame = self.static._drain_device(trace=False)
             if frame is None or len(segments) != len(self.history):
                 raise ValueError("rigid hybrid histories diverged")
             device = self.dynamic.device
-            counts = np.array([s[0] for s in segments], dtype=np.int32)
-            offsets = np.r_[0, np.cumsum(counts[:-1])].astype(np.int32)
-            starts = [wp.transform(*s[1]) for s in segments]
-            ends = [wp.transform(*s[2]) for s in segments]
-            fractions = [wp.vec2(*s[3]) for s in segments]
             matrices = np.array(self.history, dtype=np.float32).reshape(-1, 4, 4)
             wp.launch(
                 query_rigid_history,
-                dim=(int(counts.max()), len(segments)),
+                dim=(max(s[0] for s in segments), len(segments)),
                 inputs=[
-                    wp.array(counts, dtype=wp.int32, device=device),
-                    wp.array(offsets, dtype=wp.int32, device=device),
-                    wp.array(starts, dtype=wp.transform, device=device),
-                    wp.array(ends, dtype=wp.transform, device=device),
-                    wp.array(fractions, dtype=wp.vec2, device=device),
+                    wp.int64(frame[0]),
+                    frame[1],
+                    self.static.sensor.terms,
+                    self.static.sensor.coefficients,
+                    self.static.sensor.mesh.id,
+                    self.static._device_segments,
                     wp.array(matrices, dtype=wp.mat44, device=device),
                     self.mesh_ids,
                     len(self.local_meshes),

@@ -91,3 +91,11 @@ verify navigation, local search and mobile layout. Also compare code examples
 and mode limits against the current implementation; passing link checks cannot
 establish semantic freshness. Document source versus release availability without
 implying that a local candidate artifact has been uploaded.
+
+Native Isaac performance investigations can use `tests/history_benchmark.py`
+for alternating source comparisons and `tests/arena.py` for explicit worker/
+SDK stepping choices. Both live under `integrations/isaac-sim/`. The latter
+records complete range hashes so a faster caller loop can be checked against
+the same acquired output. See the [measurement protocol](performance-tradeoffs.md#further-pass-packed-metadata-and-the-actual-arena-loop).
+Keep profiler timings separate from unprofiled runs and retain runtime/geometry
+scope when publishing results.

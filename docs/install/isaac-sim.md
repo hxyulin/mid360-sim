@@ -90,6 +90,23 @@ missed first emission. No privileged world pose is published. This release
 provides data for a caller's ROS/other bridge, not an embedded rclrs publisher
 inside Kit. The separate Rust ROS publisher remains available.
 
+## Where the performance gain comes from
+
+The adapter uses Warp CUDA mesh-BVH queries, not Isaac's native RTX LiDAR
+render/annotator pipeline. Its measured advantage does not establish a faster
+ray-intersection kernel than hardware RTX traversal. The useful differences
+are acquisition scheduling: amortizing Python/kernel/readback overhead,
+reusing static geometry and querying retained sensor pose segments without
+requiring a render for each motion update. Explicit static/dynamic partitions
+can also avoid repeatedly refitting the arena when only robot roots move.
+
+Against the official Gazebo implementation, the comparison also changes CPU/ODE
+queries to GPU queries and includes different publication overhead. The
+approximately 9× marginal sensor-cost result is not a pure CPU/GPU kernel test.
+Whole-loop improvement was only 17.5% in the tuned headless room configuration;
+normal USD-writeback operation did not beat the official whole-loop runtime.
+See the [measurement scopes](../performance-tradeoffs.md) before extrapolating.
+
 ## Choose an execution mode
 
 | Workload | Configuration | Geometry contract |
@@ -346,3 +363,19 @@ room comparison; [architecture experiments](../isaac-performance.md) retain olde
 microbenchmarks, moving partitions, CAD scaling and their reproduction commands.
 A high RTF in the six-wall room does not imply the same budget with a full arena,
 articulated robots, rendered cameras and ROS publication.
+
+## Headless SDK stepping probes
+
+The current benchmark pass packs pose-segment metadata into one upload and
+fuses static/rigid-object queries. It preserves the same motion model; measured
+acquisition-only gains are workload-dependent. See the
+[further optimization results](../performance-tradeoffs.md#further-pass-packed-metadata-and-the-actual-arena-loop)
+for the static room, moving sources and full CAD arena.
+
+The arena harness exposes `--physics-threads`, `--physics-driver` and
+`--physics-batch-steps` to isolate caller-loop overhead. With the public manager
+API, batching calls still advances individual 1 ms physics steps and delivers
+per-step callbacks. Keep control/input work in those callbacks when needed.
+These are headless opt-in settings, not changes to the extension's ownership,
+physics timestep, USD-writeback or render scheduling defaults. Native/Fabric
+pose sources and graphical applications require their own coherent update path.

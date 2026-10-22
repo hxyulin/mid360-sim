@@ -2,8 +2,9 @@
 # Copyright (c) 2026 hxyulin <hxyulin@proton.me>
 """MuJoCo 3.7+ CPU ray adapter over the caller's live mjModel/mjData.
 
-No stepping, wall clock or second dynamics world. Geometry and mounted pose are
-frozen during each query batch; schedule short scans from the physics loop.
+No stepping, wall clock or second dynamics world. scan() holds the mounted pose;
+scan_rolling() interpolates caller-supplied sensor poses. Both query the current
+geometry; schedule coherent short captures from the physics loop.
 """
 
 import mujoco
@@ -155,9 +156,18 @@ class MujocoSensor:
             ) / np.sin(angle)
         local = directions(first_index, count, stride)
         # Unit-quaternion vector rotation; no SciPy dependency or per-ray loop.
-        world = local + 2 * np.cross(
-            q[:, :3], np.cross(q[:, :3], local) + q[:, 3, None] * local
-        )
+        # Expand the two quaternion cross products component-wise. This keeps
+        # the same per-emission rotation without np.cross's axis handling and
+        # temporary Nx3 arrays in every short physics-step query.
+        x, y, z, w = q.T
+        dx, dy, dz = local.T
+        tx = 2 * (y * dz - z * dy)
+        ty = 2 * (z * dx - x * dz)
+        tz = 2 * (x * dy - y * dx)
+        world = np.empty_like(local)
+        world[:, 0] = dx + w * tx + y * tz - z * ty
+        world[:, 1] = dy + w * ty + z * tx - x * tz
+        world[:, 2] = dz + w * tz + x * ty - y * tx
         distance = float(np.linalg.norm(p1 - p0)) * float(fraction[1] - fraction[0])
         if not np.isfinite(distance):
             raise ValueError("nonfinite pose displacement")

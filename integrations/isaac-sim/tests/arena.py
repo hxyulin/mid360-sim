@@ -8,6 +8,8 @@ Field mechanisms remain in their supplied rest poses. No source assets shipped.
 """
 
 import argparse
+import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import sys
@@ -20,25 +22,74 @@ parser.add_argument("--mode", choices=("combined", "hybrid", "rigid"), default="
 parser.add_argument("--robots", type=int, choices=(1, 4, 8), default=4)
 parser.add_argument("--steps", type=int, default=2000)
 parser.add_argument("--verify", action="store_true")
+parser.add_argument("--physics-threads", type=int, choices=(0, 1, 4, 8, 32))
+parser.add_argument("--profile-cpu", action="store_true")
+parser.add_argument(
+    "--physics-driver", choices=("context", "manager"), default="context"
+)
+parser.add_argument("--physics-batch-steps", type=int, choices=(1, 10, 100), default=1)
+parser.add_argument(
+    "--backend-file",
+    type=Path,
+    help="External backend.py with adjacent nominal.json for controlled source comparisons",
+)
 args = parser.parse_args()
+if args.physics_driver != "manager" and args.physics_batch_steps != 1:
+    parser.error("batched stepping requires --physics-driver manager")
 if not 100 <= args.steps <= 10000 or args.steps % 100:
     parser.error("steps must be a multiple of 100 in 100..10000")
 from isaacsim import SimulationApp
 
-app = SimulationApp({"headless": True, "multi_gpu": False})
+app = SimulationApp(
+    {
+        "headless": True,
+        "multi_gpu": False,
+        "extra_args": (
+            []
+            if args.physics_threads is None
+            else [f"--/persistent/physics/numThreads={args.physics_threads}"]
+        ),
+    }
+)
 try:
     import numpy as np
+    import carb
     import omni.usd
+
+    if args.physics_threads is not None:
+        assert (
+            carb.settings.get_settings().get("/persistent/physics/numThreads")
+            == args.physics_threads
+        )
     from pxr import Gf, Vt, UsdGeom, UsdPhysics, PhysxSchema
     from isaacsim.core.api import SimulationContext
+    from isaacsim.core.simulation_manager import SimulationManager
     from isaacsim.core.utils.extensions import enable_extension
 
     enable_extension("omni.warp.core")
     sys.path.insert(
         0, str(Path(__file__).resolve().parents[1] / "exts" / "hxyulin.mid360")
     )
+    from mid360.isaac import backend, extension as extension_module
     from mid360.isaac.extension import Extension, create_sensor, latest_frame, _pose
-    from mid360.isaac.backend import Mid360Sensor, RigidHybridSensor
+
+    if args.backend_file is not None:
+        spec = importlib.util.spec_from_file_location(
+            "arena_baseline", args.backend_file
+        )
+        backend = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = backend
+        spec.loader.exec_module(backend)
+        # Only this benchmark process substitutes an acquisition implementation;
+        # physics, extension scheduling, assets and workload remain unchanged.
+        for name in (
+            "Mid360Sensor",
+            "StaticSceneBatch",
+            "HybridSensor",
+            "RigidHybridSensor",
+        ):
+            setattr(extension_module, name, getattr(backend, name))
+    Mid360Sensor, RigidHybridSensor = backend.Mid360Sensor, backend.RigidHybridSensor
 
     data = np.load(args.input, allow_pickle=False)
     metadata = json.loads(str(data["metadata"]))
@@ -108,6 +159,12 @@ try:
     sim.initialize_physics()
     sim.play()
 
+    def advance_one():
+        if args.physics_driver == "context":
+            sim.step(render=False)
+        else:
+            SimulationManager.step()
+
     def body_positions():
         cache = UsdGeom.XformCache()
         return np.array(
@@ -119,21 +176,27 @@ try:
         if sensing:
             extension = Extension()
             extension.on_startup("arena-benchmark")
-        for _ in range(100):
-            sim.step(render=False)
+        if args.physics_driver == "manager":
+            SimulationManager.step(steps=100)
+        else:
+            for _ in range(100):
+                advance_one()
         first = 0 if not sensing else latest_frame(sensor_path).first_index + 20000
         before_positions = body_positions()
         durations, sampled_frames = [], []
         count, points, messages = 0, 0, 0
+        digest = hashlib.sha256()
         start = time.perf_counter()
-        for i in range(args.steps):
-            begin = time.perf_counter()
-            sim.step(render=False)
+        last_step_end = start
+
+        def after_step(i):
+            nonlocal count, points, messages, last_step_end
             if sensing and (i + 1) % 100 == 0:
                 frame = latest_frame(sensor_path)
                 assert frame is not None and len(frame.ranges_m) == 20000
                 assert frame.first_index == first + (i + 1 - 100) * 200
                 assert np.isfinite(frame.ranges_m).all()
+                digest.update(frame.ranges_m.tobytes())
                 fields = frame.livox_fields()
                 assert np.all(fields["offset_time"] < 100_000_000)
                 count += len(frame.ranges_m)
@@ -141,7 +204,18 @@ try:
                 messages += 1
                 if len(sampled_frames) < 2:
                     sampled_frames.append(frame)
-            durations.append((time.perf_counter() - begin) * 1000)
+            durations.append((time.perf_counter() - last_step_end) * 1000)
+            last_step_end = time.perf_counter()
+
+        for batch_start in range(0, args.steps, args.physics_batch_steps):
+            if args.physics_driver == "manager":
+                SimulationManager.step(
+                    steps=args.physics_batch_steps,
+                    callback=lambda step, total: after_step(batch_start + step - 1),
+                )
+            else:
+                advance_one()
+                after_step(batch_start)
         wall = time.perf_counter() - start
         displacement = np.linalg.norm(body_positions() - before_positions, axis=1)
         assert np.all(displacement > 0.005), displacement
@@ -160,13 +234,27 @@ try:
             step_p95_ms=float(np.percentile(durations, 95)),
             steps_over_1ms=int(np.sum(np.array(durations) > 1)),
             scheduled_rays=count,
+            range_sha256=digest.hexdigest() if sensing else None,
             valid_returns=points,
             messages=messages,
             robot_displacement_m=displacement.tolist(),
         )
 
     baseline = run(False)
-    measured = run(True)
+    if args.profile_cpu:
+        import cProfile
+        import pstats
+        import io
+
+        profile = cProfile.Profile()
+        profile.enable()
+        measured = run(True)
+        profile.disable()
+        stream = io.StringIO()
+        pstats.Stats(profile, stream=stream).sort_stats("cumtime").print_stats(30)
+        args.output.with_suffix(".profile.txt").write_text(stream.getvalue())
+    else:
+        measured = run(True)
     verification = None
     if args.verify:
         reference = Mid360Sensor(stage, roots=("/World/Field", "/World/Robots"))
@@ -179,7 +267,7 @@ try:
         dynamic_hits = 0
         previous = _pose(stage, sensor_path)
         for i in range(100):
-            sim.step(render=False)
+            advance_one()
             current = _pose(stage, sensor_path)
             expected.append(
                 reference.scan(
@@ -221,6 +309,13 @@ try:
         )
     report = dict(
         mode=args.mode,
+        physics_driver=args.physics_driver,
+        physics_batch_steps=args.physics_batch_steps,
+        physics_threads=carb.settings.get_settings().get(
+            "/persistent/physics/numThreads"
+        ),
+        cpu_profiled=args.profile_cpu,
+        backend_sha256=hashlib.sha256(Path(backend.__file__).read_bytes()).hexdigest(),
         robots=args.robots,
         physics_dt_s=0.001,
         rays_per_s=200000,

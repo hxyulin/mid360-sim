@@ -4,6 +4,19 @@
 
 ## Unreleased
 
+### Dependencies
+
+- Update Tokio to 1.54.1 to address RUSTSEC-2026-0384.
+
+### Offline tools
+
+- Add checksummed local edge fixtures and per-ray missing/false-foreground/
+  false-background regression checks, with portable synthetic occlusion tests.
+
+- Reconstruct the ETH3D Office example jointly from both scanner views, reserving
+  validation points before fusion; refresh results and matched-ray panoramas.
+  Retire the experimental layered repair example from the supported workflow.
+
 ### Documentation
 
 - Add a reproducible public ETH3D Office → optical mesh → MuJoCo example,
@@ -14,6 +27,16 @@
   current tradeoff report, and clarify source/release and Pages deployment setup.
 
 ### Integrations
+
+- Pack Isaac segment metadata into one upload and fuse static/rigid-object
+  tracing while preserving per-emission poses and near-hit occlusion.
+- Add controlled source-comparison benchmarks and headless SDK stepping/thread
+  probes with per-step acquisition callbacks and complete range hashes.
+
+- Reduce temporary arrays in MuJoCo per-emission quaternion rotation while
+  retaining the same SLERP, timestamps and origin-displacement policy.
+- Reuse bounded Isaac static-tracing device output buffers; preserve owned
+  host frames across buffer growth and smaller subsequent batches.
 
 - Add owned bulk pose histories for Isaac static-scene tracing, reducing
   Python/transfer overhead while retaining per-emission motion and bounds.
