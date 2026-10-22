@@ -262,8 +262,13 @@ impl Sensor {
                     1.
                 };
                 if valid
-                    && (e.dropout == 0. || uniform(e.seed, index, 1) >= e.dropout)
-                    && uniform(e.seed, index, 2) < response
+                    && (e.dropout == 0.
+                        || (e.dropout < 1. && uniform(e.seed, index, 1) >= e.dropout))
+                    // The historical uniform mapping can round to 1. Keep its
+                    // seeded streams intact, but make probability endpoints exact.
+                    && (!e.diffuse_dropout
+                        || response == 1.
+                        || uniform(e.seed, index, 2) < response)
                 {
                     let mut range = hit.distance_m + e.range_bias_m;
                     if RANGE_NOISE {
@@ -296,6 +301,147 @@ mod tests {
             })
         }
     }
+    #[test]
+    fn probability_endpoints_are_exact_even_when_uniform_rounds_to_one() {
+        const SEED: u64 = 7_849_933_349_262_882_758;
+        // Preserve the historical mapping, including its rounded endpoint.
+        assert_eq!(uniform(SEED, 0, 2).to_bits(), 1_f64.to_bits());
+        let independent_seed = SEED ^ 2_u64.wrapping_mul(0xd1b54a32d192ed03) ^ 0xd1b54a32d192ed03;
+        assert_eq!(uniform(independent_seed, 0, 1).to_bits(), 1_f64.to_bits());
+        struct FirstSurface {
+            distance_m: f64,
+            response: f64,
+            queries: std::cell::Cell<usize>,
+        }
+        impl Scene for FirstSurface {
+            fn nearest_hit(&self, _: u64, _: [f64; 3], _: f64) -> Option<SurfaceHit> {
+                let queries = self.queries.get();
+                self.queries.set(queries + 1);
+                // Retrying a rejected first surface would expose a background.
+                Some(SurfaceHit {
+                    distance_m: if queries == 0 { self.distance_m } else { 20. },
+                    incidence_cosine: 1.,
+                    reflectance: if queries == 0 { self.response } else { 1. },
+                })
+            }
+        }
+        for seed in [0, 7, SEED, independent_seed, u64::MAX] {
+            for diffuse_dropout in [false, true] {
+                for dropout in [0., 1.] {
+                    for response in [0., 1.] {
+                        for distance_m in [0.05, 2.] {
+                            let scene = FirstSurface {
+                                distance_m,
+                                response,
+                                queries: Default::default(),
+                            };
+                            let sensor = Sensor::new(
+                                0.1,
+                                40.,
+                                123,
+                                Effects {
+                                    seed,
+                                    diffuse_dropout,
+                                    dropout,
+                                    ..Default::default()
+                                },
+                            )
+                            .unwrap();
+                            let mut frame = RollingFrame::default();
+                            sensor.sample_into(&scene, 0, 1, 1, &mut frame).unwrap();
+                            let expected = (dropout == 0.
+                                && distance_m >= 0.1
+                                && (!diffuse_dropout || response == 1.))
+                                .then_some(2.);
+                            assert_eq!(frame.points[0].range_m, expected);
+                            assert_eq!(frame.points[0].time_ns, 123);
+                            assert_eq!(scene.queries.get(), 1);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Scalar pre-fix acceptance and measurement arithmetic. This deliberately
+    // retains the unconditional diffuse draw and historical stream numbers.
+    fn historical_return(e: Effects, index: u64, hit: SurfaceHit) -> TimedReturn {
+        let d = AngularNoise::new(e.angular_sigma_rad, e.seed)
+            .unwrap()
+            .perturb_unit(index, crate::hardware::NominalPattern.direction(index));
+        let mut point = TimedReturn {
+            sample_index: index,
+            time_ns: 10 + index * POINT_INTERVAL_NS,
+            range_m: None,
+            point_sensor_m: None,
+        };
+        let response = if e.diffuse_dropout {
+            hit.reflectance * hit.incidence_cosine
+        } else {
+            1.
+        };
+        if (e.dropout == 0. || uniform(e.seed, index, 1) >= e.dropout)
+            && uniform(e.seed, index, 2) < response
+        {
+            let mut range = hit.distance_m + e.range_bias_m;
+            if e.range_sigma_m > 0. {
+                range += e.range_sigma_m * normal(e.seed, index, 3);
+            }
+            if range.is_finite() && range > 0. && (0.1..=40.).contains(&range) {
+                point.range_m = Some(range);
+                point.point_sensor_m = Some(d.map(|v| v * range));
+            }
+        }
+        point
+    }
+
+    #[test]
+    fn nonendpoint_acceptance_preserves_historical_measurement_bits() {
+        struct Material(SurfaceHit);
+        impl Scene for Material {
+            fn nearest_hit(&self, _: u64, _: [f64; 3], _: f64) -> Option<SurfaceHit> {
+                Some(self.0)
+            }
+        }
+        let scene = Material(SurfaceHit {
+            distance_m: 10.,
+            incidence_cosine: 0.7,
+            reflectance: 0.6,
+        });
+        for seed in [0, 7, 17, u64::MAX] {
+            for diffuse_dropout in [false, true] {
+                for dropout in [0., 0.1, 0.9] {
+                    for noisy in [false, true] {
+                        let effects = Effects {
+                            seed,
+                            diffuse_dropout,
+                            dropout,
+                            range_sigma_m: if noisy { 0.02 } else { 0. },
+                            angular_sigma_rad: if noisy { 0.001 } else { 0. },
+                            range_bias_m: -0.003,
+                        };
+                        let sensor = Sensor::new(0.1, 40., 10, effects).unwrap();
+                        let mut frame = RollingFrame::default();
+                        sensor.sample_into(&scene, 7, 256, 1, &mut frame).unwrap();
+                        for actual in frame.points {
+                            let expected = historical_return(effects, actual.sample_index, scene.0);
+                            assert_eq!(actual.sample_index, expected.sample_index);
+                            assert_eq!(actual.time_ns, expected.time_ns);
+                            assert_eq!(
+                                actual.range_m.map(f64::to_bits),
+                                expected.range_m.map(f64::to_bits)
+                            );
+                            assert_eq!(
+                                actual.point_sensor_m.map(|p| p.map(f64::to_bits)),
+                                expected.point_sensor_m.map(|p| p.map(f64::to_bits))
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn capture_profile_preserves_chunking_and_rejects_overrun_atomically() {
         let s = Sensor::new(
@@ -339,6 +485,23 @@ mod tests {
         for effects in [
             Effects::default(),
             Effects {
+                seed: 7_849_933_349_262_882_758,
+                range_sigma_m: 0.02,
+                angular_sigma_rad: 0.001,
+                ..Default::default()
+            },
+            Effects {
+                seed: 7_849_933_349_262_882_758,
+                diffuse_dropout: true,
+                range_sigma_m: 0.02,
+                angular_sigma_rad: 0.001,
+                ..Default::default()
+            },
+            Effects {
+                dropout: 1.,
+                ..Default::default()
+            },
+            Effects {
                 range_sigma_m: 0.02,
                 ..Default::default()
             },
@@ -356,15 +519,15 @@ mod tests {
         ] {
             let s = Sensor::new(0.1, 40., 10, effects).unwrap();
             let mut all = RollingFrame::default();
-            s.sample_into(&Surface(10.), 7, 1000, 1, &mut all).unwrap();
+            s.sample_into(&Surface(10.), 0, 1000, 1, &mut all).unwrap();
             let mut a = RollingFrame::default();
             let mut b = RollingFrame::default();
-            s.sample_into(&Surface(10.), 7, 499, 1, &mut a).unwrap();
-            s.sample_into(&Surface(10.), 506, 501, 1, &mut b).unwrap();
+            s.sample_into(&Surface(10.), 0, 499, 1, &mut a).unwrap();
+            s.sample_into(&Surface(10.), 499, 501, 1, &mut b).unwrap();
             a.points.append(&mut b.points);
             assert_eq!(all, a);
             for stride in [1, 2, 3, 4, 7, 31] {
-                s.sample_into(&Surface(10.), 7, 1000u32.div_ceil(stride), stride, &mut b)
+                s.sample_into(&Surface(10.), 0, 1000u32.div_ceil(stride), stride, &mut b)
                     .unwrap();
                 assert_eq!(
                     b.points,
