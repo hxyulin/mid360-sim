@@ -26,7 +26,7 @@ try:
     sys.path.insert(
         0, str(Path(__file__).resolve().parents[1] / "exts" / "hxyulin.mid360")
     )
-    from mid360.isaac.backend import Mid360Sensor, MODEL
+    from mid360.isaac.backend import Mid360Sensor, StaticSceneBatch, MODEL
 
     context = omni.usd.get_context()
     context.new_stage()
@@ -192,6 +192,84 @@ try:
     grown = sensor.flush()
     expected = sensor.scan(0, 24000, pose)
     np.testing.assert_array_equal(grown.ranges_m, expected.ranges_m)
+    # Static tracing batches retain per-segment, non-linear translation/rotation.
+    static = StaticSceneBatch(sensor)
+    cursor = 17
+    expected_parts = []
+    poses = [
+        pose,
+        ((0.2, -0.1, 0.8), (0, 0, 0.6, 0.8)),
+        ((-0.3, 0.4, 0.9), (0, 0.6, 0, 0.8)),
+        ((0.1, 0.2, 0.7), (0.6, 0, 0, 0.8)),
+    ]
+    for i, count in enumerate((197, 201, 203)):
+        expected_parts.append(
+            sensor.scan(
+                cursor,
+                count,
+                poses[i],
+                poses[i + 1],
+                stride=3,
+                pose_fraction=(0.1, 0.8),
+            )
+        )
+        static.scan(
+            cursor, count, poses[i], poses[i + 1], stride=3, pose_fraction=(0.1, 0.8)
+        )
+        cursor += count * 3
+    traced = static.flush()
+    np.testing.assert_array_equal(
+        traced.directions, np.concatenate([p.directions for p in expected_parts])
+    )
+    np.testing.assert_allclose(
+        traced.ranges_m, np.concatenate([p.ranges_m for p in expected_parts]), atol=1e-5
+    )
+    np.testing.assert_array_equal(
+        traced.timestamps_ns, np.concatenate([p.timestamps_ns for p in expected_parts])
+    )
+    assert static.flush() is None
+
+    # The GPU subinterval path agrees with explicit CPU endpoint interpolation.
+    def interpolate_pose(a, b, fraction):
+        position = tuple(x + (y - x) * fraction for x, y in zip(a[0], b[0]))
+        qa = Gf.Quatd(a[1][3], Gf.Vec3d(*a[1][:3]))
+        qb = Gf.Quatd(b[1][3], Gf.Vec3d(*b[1][:3]))
+        q = Gf.Slerp(fraction, qa, qb)
+        return position, (*q.GetImaginary(), q.GetReal())
+
+    gpu_fraction = sensor.scan(
+        123, 101, poses[1], poses[2], pose_fraction=(0.123, 0.987)
+    )
+    cpu_fraction = sensor.scan(
+        123,
+        101,
+        interpolate_pose(poses[1], poses[2], 0.123),
+        interpolate_pose(poses[1], poses[2], 0.987),
+    )
+    np.testing.assert_allclose(gpu_fraction.ranges_m, cpu_fraction.ranges_m, atol=2e-4)
+    # The static-only path must reject moving optical geometry, not trace old
+    # poses against its new location. Ordinary per-step tracing still supports it.
+    static.scan(0, 200, pose)
+    box.GetOrderedXformOps()[0].Set(Gf.Vec3d(0.1, 0, 0))
+    try:
+        static.flush()
+        raise AssertionError("changed static geometry accepted")
+    except ValueError as error:
+        assert "geometry changed" in str(error)
+    box.GetOrderedXformOps()[0].Set(Gf.Vec3d(0, 0, 0))
+    # PhysX writeback need not emit authoring notices. Never cache such meshes
+    # as static or let the static tracing architecture accept them.
+    from pxr import UsdPhysics
+
+    UsdPhysics.RigidBodyAPI.Apply(box.GetPrim())
+    physical = Mid360Sensor(stage, roots=("/World/Enclosure",))
+    assert not physical._cache_transforms
+    try:
+        StaticSceneBatch(physical)
+        raise AssertionError("physics-driven optical geometry accepted as static")
+    except ValueError:
+        pass
+    box.GetPrim().RemoveAPI(UsdPhysics.RigidBodyAPI)
     # Exercise the actual Kit extension on the simulation timeline, including
     # paused time and STOP/reset, not just direct Python backend calls.
     stage.RemovePrim("/World/Near")
@@ -233,7 +311,7 @@ try:
         median_ms=statistics.median(durations),
         p95_ms=float(np.percentile(durations, 95)),
         max_reference_vector_difference=max(errors),
-        checks="GPU enclosure intersections, Rust fixtures, long-cycle wrap, chunk/stride invariance, dynamic transforms, near-hit occlusion, rolling sensor translation/rotation, nonuniform scale, combined triangle mesh BVH, deferred readback ownership/growth/moving geometry/ancestor invalidation, Kit extension acquisition/pause/reset",
+        checks="GPU enclosure intersections, Rust fixtures, long-cycle wrap, chunk/stride invariance, dynamic transforms, near-hit occlusion, rolling sensor translation/rotation, nonuniform scale, combined triangle mesh BVH, deferred readback ownership/growth/moving geometry/ancestor invalidation, segmented static tracing equivalence/change rejection/GPU pose fractions/physics ancestor rejection, Kit extension acquisition/pause/reset",
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n")

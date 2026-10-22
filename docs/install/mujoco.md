@@ -48,12 +48,25 @@ Queries preserve dynamics time/qpos, not an assertion that every mjData byte is
 unchanged. Local rays are FLU (+X,+Y,+Z), using the site orientation in the live
 model. No quaternion conversion is needed for the default site-mounted API.
 
-Geometry and mount pose are **frozen during a scan**. Original per-emission
-timestamps are retained, but this version does not interpolate sensor or
-obstacle motion inside that scan. Prefer physics-step-sized batches (e.g. 200
-rays per millisecond). This differs from Isaac's optional per-ray sensor-pose
-interpolation. Do not claim equivalent rolling motion fidelity for a 100 ms
-MuJoCo batch. All returned arrays own their data and survive later queries.
+Default `scan()` holds the mount and geometry during its batch. Keep these
+batches short (e.g. 200 rays per millisecond). For finer sensor motion, use:
+
+```python
+# Caller-owned boundary poses: metres, xyzw unit quaternion.
+a = ((0, 0, .8), (0, 0, 0, 1))
+b = ((.001, 0, .8), (0, 0, .0005, .999999875))
+frame = sensor.scan_rolling(0, 200, a, b,
+    pose_fraction=(0, 199 / 200), origin_tolerance_m=.0005)
+```
+
+`scan_rolling()` interpolates orientation per emission using shortest-arc SLERP.
+Native `mj_multiRay` shares an origin, so translation is divided into groups
+with midpoint origins. The tolerance bounds **origin displacement**, not range
+error at grazing surfaces. Smaller tolerances can increase query overhead.
+The scene remains the current `mjData` throughout each call: this API supplies
+sensor history, not obstacle history. It never advances physics. Returned
+arrays own their data. See the [runtime/accuracy comparison](../performance-tradeoffs.md)
+for measured benefits and costs; the rolling option is not automatically faster.
 
 MuJoCo ray tests use its geoms, not an independent render scene. Include
 suitable optical mesh geoms if collision proxies erase visual detail. The
@@ -77,7 +90,7 @@ It does not load any capture replay table. The bundled tiny `nominal.json` is
 regenerated from `cargo run --example export_isaac_model`; keep it byte-identical
 to the Isaac model after updating the Rust source.
 
-Five native regressions cover optical fixtures, analytic distances, moving
+Eight native regressions cover optical fixtures, analytic distances, moving
 mounted poses, chunk/stride consistency, timing, group filtering, near
 occlusion, validation and dynamics-time/qpos preservation. The direction-only
 cross-language comparisons tolerate floating-point differences, not hardware

@@ -129,3 +129,47 @@ flushed just to complete a test. These full-server timings include physics,
 scheduling and publication; do not compare them directly to Isaac's isolated
 GPU query timing. Simple-room throughput is not evidence for a detailed arena.
 Local evidence is under ignored `local-assets/gazebo-validation/`.
+
+## Performance profiling
+
+The adapter now shares each Fourier basis across a four-lane optical group and
+reserves its 400 kB publication buffer. It retains per-step native intersections,
+original emission identities and odd-stride behavior. No geometry is reused
+across motion steps, and no points are discarded for speed.
+
+Run `bash /workspace/source/tests/benchmark.sh` inside the development container
+after `tests/run.sh`. An optional first argument selects a previously built
+plugin directory for an alternating original/optimized comparison. The harness
+warms 100 real steps before timing 2,000 more, verifies the actual server
+iteration count, and separately measures a valid sensor-disabled SDF world.
+It omits expensive subscriber-side per-point validation during timing, while
+ordinary native tests still validate points against analytic enclosure hits.
+
+Three final Talos trials gave these median times for two simulated seconds:
+
+| Case | Wall time | Real-time factor |
+|---|---:|---:|
+| Sensor disabled | 13.6 ms | 146.7× |
+| Original plugin | 401.5 ms | 4.98× |
+| Shared optical groups | 389.9 ms | 5.13× |
+
+An earlier three-trial run measured 377.3 → 350.3 ms (7.2% less runtime);
+the final run measured 2.9% less runtime. Treat this as a modest improvement,
+with run-to-run variability, rather than a fixed percentage. Both full-rate
+plugins produced 400,000 returns in 20 messages. Cold startup costs roughly
+1.3–1.6 seconds in this installation and explains most of the earlier apparent
+near-real-time limitation. This remains a six-box enclosure, not an arena test.
+
+Add `<profile_file>/absolute/writable/report.json</profile_file>` to the plugin
+for optional monotonic host-time diagnostics. This does not affect simulation
+stamps. The report is written on plugin destruction and aggregates PreUpdate,
+the intervening physics/scheduler interval, and PostUpdate. Omit it during
+ordinary use; no profiling clocks run by default. A final 2,100-step capture
+(including warmup) measured 26.1 ms in PreUpdate, 362.3 ms between callbacks and
+7.3 ms in PostUpdate: about 92% of the profiled interval is in native physics/
+scheduling, not pattern generation or serialization. That interval includes
+other engine work and is not a measurement of isolated raycast calls.
+
+The next substantial optimization would need to address native engine ray
+queries or use a separately designed optical GPU adapter. Merely delaying
+publication does not eliminate the motion-aware per-step intersections.

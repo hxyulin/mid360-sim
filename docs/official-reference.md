@@ -6,6 +6,11 @@ GitHub's current `main` resolves to the already pinned revision
 `1cce1073633a062b92e30243a4c2920e45551bb5`. This investigation concerns that
 revision of Livox-SDK/livox_laser_simulation, not every simulator or fork.
 
+The initial source/proxy audit below is retained as historical evidence.
+We subsequently compiled and executed this exact upstream scan callback in
+ROS Melodic / Gazebo 9. See [native runtime and motion comparison](performance-tradeoffs.md)
+for the measured results, minimum-range configuration and harness limitations.
+
 ## Source findings
 
 The [plugin](https://github.com/Livox-SDK/livox_laser_simulation/blob/1cce1073633a062b92e30243a4c2920e45551bb5/src/livox_points_plugin.cpp)

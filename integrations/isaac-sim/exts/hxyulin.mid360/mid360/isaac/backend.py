@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 import warp as wp
-from pxr import Usd, UsdGeom, Tf, Sdf
+from pxr import Usd, UsdGeom, UsdPhysics, Tf, Sdf
 
 MODEL = json.loads(Path(__file__).with_name("nominal.json").read_text())
 CYCLE_GROUPS = wp.constant(MODEL["groups_per_cycle"])
@@ -74,6 +74,8 @@ def query_scan(
     mesh: wp.uint64,
     pose_start: wp.transform,
     pose_end: wp.transform,
+    fraction_start: float,
+    fraction_end: float,
     min_range: float,
     max_range: float,
     directions: wp.array(dtype=wp.vec3),
@@ -82,7 +84,9 @@ def query_scan(
     i = wp.tid()
     d = nominal_direction(first + wp.int64(i) * wp.int64(stride), terms, coefficients)
     directions[output_offset + i] = d
-    fraction = float(i) / float(wp.max(count - 1, 1))
+    fraction = wp.lerp(
+        fraction_start, fraction_end, float(i) / float(wp.max(count - 1, 1))
+    )
     position = wp.lerp(
         wp.transform_get_translation(pose_start),
         wp.transform_get_translation(pose_end),
@@ -98,6 +102,135 @@ def query_scan(
     ranges[output_offset + i] = -1.0
     if result.result and result.t >= min_range:
         ranges[output_offset + i] = result.t
+
+
+@wp.kernel
+def query_segments(
+    first: wp.int64,
+    stride: int,
+    counts: wp.array(dtype=wp.int32),
+    offsets: wp.array(dtype=wp.int32),
+    starts: wp.array(dtype=wp.transform),
+    ends: wp.array(dtype=wp.transform),
+    fractions: wp.array(dtype=wp.vec2),
+    terms: wp.array(dtype=wp.int32),
+    coefficients: wp.array(dtype=wp.float32),
+    mesh: wp.uint64,
+    min_range: float,
+    max_range: float,
+    directions: wp.array(dtype=wp.vec3),
+    ranges: wp.array(dtype=wp.float32),
+):
+    i, segment = wp.tid()
+    if i < counts[segment]:
+        output = offsets[segment] + i
+        d = nominal_direction(
+            first + wp.int64(output) * wp.int64(stride), terms, coefficients
+        )
+        directions[output] = d
+        fraction = wp.lerp(
+            fractions[segment][0],
+            fractions[segment][1],
+            float(i) / float(wp.max(counts[segment] - 1, 1)),
+        )
+        position = wp.lerp(
+            wp.transform_get_translation(starts[segment]),
+            wp.transform_get_translation(ends[segment]),
+            fraction,
+        )
+        rotation = wp.quat_slerp(
+            wp.transform_get_rotation(starts[segment]),
+            wp.transform_get_rotation(ends[segment]),
+            fraction,
+        )
+        result = wp.mesh_query_ray(
+            mesh, position, wp.quat_rotate(rotation, d), max_range
+        )
+        ranges[output] = -1.0
+        if result.result and result.t >= min_range:
+            ranges[output] = result.t
+
+
+@wp.kernel
+def merge_nearest_ranges(
+    static_ranges: wp.array(dtype=wp.float32),
+    dynamic_ranges: wp.array(dtype=wp.float32),
+    min_range: float,
+):
+    i = wp.tid()
+    a = static_ranges[i]
+    b = dynamic_ranges[i]
+    nearest = b
+    if a >= 0.0 and (b < 0.0 or a < b):
+        nearest = a
+    dynamic_ranges[i] = -1.0
+    if nearest >= min_range:
+        dynamic_ranges[i] = nearest
+
+
+@wp.kernel
+def query_rigid_history(
+    counts: wp.array(dtype=wp.int32),
+    offsets: wp.array(dtype=wp.int32),
+    starts: wp.array(dtype=wp.transform),
+    ends: wp.array(dtype=wp.transform),
+    fractions: wp.array(dtype=wp.vec2),
+    inverse_history: wp.array(dtype=wp.mat44),
+    mesh_ids: wp.array(dtype=wp.uint64),
+    object_count: int,
+    min_range: float,
+    max_range: float,
+    directions: wp.array(dtype=wp.vec3),
+    ranges: wp.array(dtype=wp.float32),
+):
+    i, segment = wp.tid()
+    if i < counts[segment]:
+        output = offsets[segment] + i
+        fraction = wp.lerp(
+            fractions[segment][0],
+            fractions[segment][1],
+            float(i) / float(wp.max(counts[segment] - 1, 1)),
+        )
+        position = wp.lerp(
+            wp.transform_get_translation(starts[segment]),
+            wp.transform_get_translation(ends[segment]),
+            fraction,
+        )
+        rotation = wp.quat_slerp(
+            wp.transform_get_rotation(starts[segment]),
+            wp.transform_get_rotation(ends[segment]),
+            fraction,
+        )
+        direction = wp.quat_rotate(rotation, directions[output])
+        nearest = ranges[output]
+        # A static hit below min range already blocks everything behind it.
+        if nearest < 0.0 or nearest >= min_range:
+            for obj in range(object_count):
+                inverse = inverse_history[segment * object_count + obj]
+                local_origin = wp.transform_point(inverse, position)
+                local_direction = wp.transform_vector(inverse, direction)
+                scale = wp.length(local_direction)
+                limit = max_range
+                if nearest >= 0.0:
+                    limit = nearest
+                hit = wp.mesh_query_ray(
+                    mesh_ids[obj], local_origin, local_direction / scale, limit * scale
+                )
+                if hit.result:
+                    distance = hit.t / scale
+                    if nearest < 0.0 or distance < nearest:
+                        nearest = distance
+        ranges[output] = -1.0
+        if nearest >= min_range:
+            ranges[output] = nearest
+
+
+def _host_frame(first, stride, epoch, directions, ranges):
+    """Copy populated device slices into an owned, transport-free host frame."""
+    host_directions, host_ranges = directions.numpy(), ranges.numpy()
+    if str(directions.device) == "cpu":
+        host_directions, host_ranges = host_directions.copy(), host_ranges.copy()
+    return ScanFrame(first, stride, epoch, host_directions, host_ranges)
 
 
 @dataclass
@@ -305,11 +438,22 @@ class Mid360Sensor:
         self.world_points = wp.empty(offset, dtype=wp.vec3, device=device)
         self._last_transforms = None
         self._transforms_dirty = True
+        self._scene_revision = 0
+
         # Instance-prototype edits need broader dependency tracking; retain the
-        # conservative per-query capture for any instance proxy in this scene.
-        self._cache_transforms = not any(
-            stage.GetPrimAtPath(p).IsInstanceProxy() for p in self.paths
-        )
+        # conservative per-query capture for instance proxies or physics-driven
+        # ancestors: PhysX writeback is not required to emit ordinary USD notices.
+        def needs_live_capture(path):
+            prim = stage.GetPrimAtPath(path)
+            if prim.IsInstanceProxy():
+                return True
+            while prim.IsValid():
+                if prim.HasAPI(UsdPhysics.RigidBodyAPI):
+                    return True
+                prim = prim.GetParent()
+            return False
+
+        self._cache_transforms = not any(needs_live_capture(p) for p in self.paths)
         self._transform_ancestors = set()
         for path in self.paths:
             path = Sdf.Path(path)
@@ -328,6 +472,7 @@ class Mid360Sensor:
                 ):
                     if path.GetPrimPath() in owner._transform_ancestors:
                         owner._transforms_dirty = True
+                        owner._scene_revision += 1
                         break
 
         self._scene_changed_callback = scene_changed
@@ -397,10 +542,14 @@ class Mid360Sensor:
         epoch_ns=0,
         stride=1,
         defer_readback=False,
+        pose_fraction=(0.0, 1.0),
     ):
         """Query explicit emissions; poses are (metre translation, xyzw quaternion).
 
         Poses correspond to first/last selected emissions, not frame boundaries.
+        pose_fraction selects a subinterval of the supplied pose endpoints
+        (default 0..1). This lets physics callbacks pass boundary poses directly
+        without first interpolating poses on the CPU.
         No wall clock or hidden acquisition index is used. Noise is currently off.
         With defer_readback=True, queue queries on the GPU and return None;
         flush() returns one owned host frame for contiguous queued emissions.
@@ -416,6 +565,12 @@ class Mid360Sensor:
             or not 1 <= stride <= 1001
         ):
             raise ValueError("invalid acquisition window")
+        if (
+            len(pose_fraction) != 2
+            or not all(math.isfinite(v) for v in pose_fraction)
+            or not 0 <= pose_fraction[0] <= pose_fraction[1] <= 1
+        ):
+            raise ValueError("invalid pose interpolation fractions")
         last = first_index + (count - 1) * stride
         if epoch_ns + last * 5000 > np.iinfo(np.uint64).max:
             raise ValueError("timestamp overflow")
@@ -472,6 +627,7 @@ class Mid360Sensor:
                 self.coefficients,
                 self.mesh.id,
                 *poses,
+                *pose_fraction,
                 self.min_range_m,
                 self.max_range_m,
                 self.directions,
@@ -489,26 +645,480 @@ class Mid360Sensor:
         return None if defer_readback else self.flush()
 
     def flush(self):
-        """Read queued rays into one owned host frame; None if no rays are pending.
+        """Read queued rays into an owned host frame; None if no rays are pending.
 
-        Query launches and mesh refits share Warp's current stream. Readback
-        waits for those queries, preserving each step's captured geometry even
-        when later steps move it. No scene mutation may race this stream.
+        Query launches, refits and readback share Warp's current stream. Scene
+        mutation must not race that stream. Readback preserves step captures.
         """
+        frame = self._drain_device()
+        return None if frame is None else _host_frame(*frame)
+
+    def _drain_device(self):
+        """Borrow populated device outputs until the next scan on this backend."""
         count = self._pending_count
         if not count:
             return None
-        # CUDA .numpy() owns a synchronized host copy. CPU arrays need copying.
-        directions = self.directions[:count].numpy()
-        ranges = self.ranges[:count].numpy()
-        if self.device == "cpu":
-            directions, ranges = directions.copy(), ranges.copy()
-        frame = ScanFrame(
+        frame = (
             self._pending_first,
             self._pending_stride,
             self._pending_epoch,
-            directions,
-            ranges,
+            self.directions[:count],
+            self.ranges[:count],
         )
         self._pending_count = 0
         return frame
+
+
+class StaticSceneBatch:
+    """Batch GPU tracing of recorded moving-sensor poses in static optical geometry.
+
+    This is opt-in: all selected optical geometry must stay fixed while a batch
+    is pending. Source/ancestor USD edits invalidate the batch and raise before
+    tracing. Instance proxies and physics-driven ancestors are rejected because
+    their updates need not emit the USD notices tracked by this batch. Moving sensor poses are retained per segment, including
+    rotations within and between segments. No second physics world is created.
+    """
+
+    def __init__(self, sensor):
+        if sensor._pending_count or not sensor._cache_transforms:
+            raise ValueError(
+                "need an idle backend without instance proxies or physics-driven geometry"
+            )
+        self.sensor = sensor
+        self.segments = []
+        self.count = 0
+        self.history = None
+
+    def scan(
+        self,
+        first_index,
+        count,
+        pose_start,
+        pose_end=None,
+        epoch_ns=0,
+        stride=1,
+        defer_readback=True,
+        pose_fraction=(0.0, 1.0),
+    ):
+        """Record contiguous segment emissions; tracing waits for flush().
+
+        At most 100 segments and 200,000 rays may be queued. Returns None.
+        Scene changes during a pending batch are rejected, never retroactively
+        applied to the recorded poses. Flush before changing stride/epoch.
+        """
+        sensor = self.sensor
+        if self.history is not None:
+            raise ValueError("flush the bulk pose history before appending segments")
+        if not defer_readback:
+            raise ValueError("static segments require explicit deferred readback")
+        if (
+            not all(isinstance(v, int) for v in (first_index, count, epoch_ns, stride))
+            or first_index < 0
+            or epoch_ns < 0
+            or not 1 <= count <= 200000
+            or not 1 <= stride <= 1001
+            or epoch_ns + (first_index + (count - 1) * stride) * 5000
+            > np.iinfo(np.uint64).max
+        ):
+            raise ValueError("invalid static acquisition window")
+        if (
+            len(pose_fraction) != 2
+            or not all(math.isfinite(v) for v in pose_fraction)
+            or not 0 <= pose_fraction[0] <= pose_fraction[1] <= 1
+        ):
+            raise ValueError("invalid pose interpolation fractions")
+        pose_end = pose_start if pose_end is None else pose_end
+        for position, rotation in (pose_start, pose_end):
+            if (
+                len(position) != 3
+                or len(rotation) != 4
+                or not all(math.isfinite(v) for v in (*position, *rotation))
+                or not math.isclose(
+                    sum(v * v for v in rotation), 1.0, rel_tol=2e-5, abs_tol=2e-5
+                )
+            ):
+                raise ValueError("invalid pose; need a unit xyzw quaternion")
+        if self.count + count > 200000 or len(self.segments) >= 100:
+            raise ValueError("static batch capacity exceeded; flush first")
+        if self.segments:
+            if self.revision != sensor._scene_revision:
+                raise ValueError("optical geometry changed during static tracing batch")
+            if (
+                first_index != self.first + self.count * self.stride
+                or stride != self.stride
+                or epoch_ns != self.epoch
+            ):
+                raise ValueError("flush before changing contiguous segment windows")
+        else:
+            sensor.sync_transforms()
+            self.revision = sensor._scene_revision
+            self.first, self.stride, self.epoch = first_index, stride, epoch_ns
+        # Own each pose: callers may reuse/mutate input arrays after this call.
+        self.segments.append(
+            (
+                count,
+                tuple(map(tuple, pose_start)),
+                tuple(map(tuple, pose_end)),
+                tuple(pose_fraction),
+            )
+        )
+        self.count += count
+
+    def scan_history(self, first_index, counts, poses, epoch_ns=0, stride=1):
+        """Queue an owned bulk history for static geometry, then flush explicitly.
+
+        counts contains 1..100 positive segment emission counts; poses has
+        shape (segments+1, 7): metres followed by unit xyzw quaternions.
+        Consecutive poses delimit each segment, whose final selected emission
+        precedes its end boundary by one emission interval. This is equivalent
+        to scan(..., pose_fraction=(0,(count-1)/count)) for each segment.
+        Maximum 200,000 rays. Cannot mix with pending segments. Geometry must
+        stay static; no future robot/geometry poses are invented here.
+        """
+        if self.count:
+            raise ValueError("flush before queuing another history")
+        raw_counts = np.asarray(counts)
+        raw_poses = np.asarray(poses, dtype=np.float64)
+        if (
+            raw_counts.ndim != 1
+            or not 1 <= len(raw_counts) <= 100
+            or not np.issubdtype(raw_counts.dtype, np.integer)
+            or np.any(raw_counts < 1)
+            or np.any(raw_counts > 200000)
+        ):
+            raise ValueError("invalid history emission counts")
+        total = int(raw_counts.sum())
+        if (
+            total > 200000
+            or raw_poses.shape != (len(raw_counts) + 1, 7)
+            or not np.isfinite(raw_poses).all()
+            or not np.allclose(
+                np.sum(raw_poses[:, 3:] ** 2, axis=1), 1.0, rtol=2e-5, atol=2e-5
+            )
+        ):
+            raise ValueError("invalid bounded pose history")
+        if (
+            not all(isinstance(v, int) for v in (first_index, epoch_ns, stride))
+            or first_index < 0
+            or epoch_ns < 0
+            or not 1 <= stride <= 1001
+            or epoch_ns + (first_index + (total - 1) * stride) * 5000
+            > np.iinfo(np.uint64).max
+        ):
+            raise ValueError("invalid history acquisition window")
+        counts = raw_counts.astype(np.int32, copy=True)
+        owned_poses = np.array(raw_poses, dtype=np.float32, copy=True)
+        fractions = np.column_stack(
+            [np.zeros(len(counts)), (counts - 1) / counts]
+        ).astype(np.float32)
+        self.sensor.sync_transforms()
+        self.revision = self.sensor._scene_revision
+        self.first, self.stride, self.epoch = first_index, stride, epoch_ns
+        self.history = counts, owned_poses, fractions
+        self.count = total
+
+    def flush(self):
+        """Trace pending static segments into an owned host frame; None if empty.
+
+        Scene changes fail closed. Use per-step tracing for moving geometry.
+        """
+        frame = self._drain_device()
+        return None if frame is None else _host_frame(*frame)
+
+    def _drain_device(self):
+        """Trace pending segments and return owned GPU arrays for immediate use."""
+        if not self.segments and self.history is None:
+            return None
+        sensor = self.sensor
+        if self.revision != sensor._scene_revision:
+            raise ValueError("optical geometry changed during static tracing batch")
+        if self.history is not None:
+            counts, poses, fractions = self.history
+            starts, ends = poses[:-1], poses[1:]
+        else:
+            counts = np.array([s[0] for s in self.segments], dtype=np.int32)
+            starts = np.array(
+                [(*s[1][0], *s[1][1]) for s in self.segments], dtype=np.float32
+            )
+            ends = np.array(
+                [(*s[2][0], *s[2][1]) for s in self.segments], dtype=np.float32
+            )
+            fractions = np.array([s[3] for s in self.segments], dtype=np.float32)
+        offsets = np.r_[0, np.cumsum(counts[:-1])].astype(np.int32)
+        directions = wp.empty(self.count, dtype=wp.vec3, device=sensor.device)
+        ranges = wp.empty(self.count, dtype=wp.float32, device=sensor.device)
+        wp.launch(
+            query_segments,
+            dim=(int(counts.max()), len(counts)),
+            inputs=[
+                wp.int64(self.first),
+                self.stride,
+                wp.array(counts, dtype=wp.int32, device=sensor.device),
+                wp.array(offsets, dtype=wp.int32, device=sensor.device),
+                wp.array(starts, dtype=wp.transform, device=sensor.device),
+                wp.array(ends, dtype=wp.transform, device=sensor.device),
+                wp.array(fractions, dtype=wp.vec2, device=sensor.device),
+                sensor.terms,
+                sensor.coefficients,
+                sensor.mesh.id,
+                sensor.min_range_m,
+                sensor.max_range_m,
+                directions,
+                ranges,
+            ],
+            device=sensor.device,
+        )
+        frame = (self.first, self.stride, self.epoch, directions, ranges)
+        self.segments.clear()
+        self.history = None
+        self.count = 0
+        return frame
+
+
+class HybridSensor:
+    """Query disjoint static and moving optical partitions on one Warp stream.
+
+    Static rays retain per-step sensor poses and are traced at flush. Moving
+    geometry is captured/traced on every scan. The closest hits are merged on
+    the GPU before minimum-range filtering, preserving near-surface occlusion.
+    Callers own a complete disjoint partition; these are two optical BVHs of
+    the caller's scene, not separate physics worlds. All host output is owned.
+    """
+
+    def __init__(self, static_sensor, dynamic_sensor, min_range_m=0.1):
+        if (
+            static_sensor.device != dynamic_sensor.device
+            or static_sensor.max_range_m != dynamic_sensor.max_range_m
+            or static_sensor.min_range_m != 0
+            or dynamic_sensor.min_range_m != 0
+            or static_sensor.stage != dynamic_sensor.stage
+            or dynamic_sensor._pending_count
+        ):
+            raise ValueError(
+                "hybrid backends need one stage/device, equal max range and zero min range"
+            )
+        if set(static_sensor.paths) & set(dynamic_sensor.paths):
+            raise ValueError("hybrid optical partitions overlap")
+        if (
+            not math.isfinite(min_range_m)
+            or not 0 <= min_range_m < static_sensor.max_range_m
+        ):
+            raise ValueError("invalid hybrid minimum range")
+        self.static = StaticSceneBatch(static_sensor)
+        self.dynamic = dynamic_sensor
+        self.min_range_m = min_range_m
+        self.failed = False
+
+    def scan(
+        self,
+        first_index,
+        count,
+        pose_start,
+        pose_end=None,
+        epoch_ns=0,
+        stride=1,
+        defer_readback=True,
+        pose_fraction=(0.0, 1.0),
+    ):
+        """Queue step-local moving hits and static pose history; returns None.
+
+        At most 100 segments / 200,000 rays may be pending. flush() returns
+        merged hits. On any acquisition failure this instance must be discarded;
+        it cannot emit a partial or mismatched union frame.
+        """
+        if self.failed:
+            raise ValueError("discard failed hybrid acquisition")
+        if not defer_readback:
+            raise ValueError("hybrid acquisition requires explicit flush")
+        try:
+            self.static.scan(
+                first_index,
+                count,
+                pose_start,
+                pose_end,
+                epoch_ns,
+                stride,
+                pose_fraction=pose_fraction,
+            )
+            self.dynamic.scan(
+                first_index,
+                count,
+                pose_start,
+                pose_end,
+                epoch_ns,
+                stride,
+                defer_readback=True,
+                pose_fraction=pose_fraction,
+            )
+        except Exception:
+            self.failed = True
+            raise
+
+    def flush(self):
+        """Merge nearest unfiltered GPU hits, then return one owned host frame.
+
+        Hits below min_range_m suppress farther geometry and become misses.
+        Static/moving ties need no material winner: output carries ranges only.
+        """
+        if self.failed:
+            raise ValueError("discard failed hybrid acquisition")
+        try:
+            static, dynamic = self.static._drain_device(), self.dynamic._drain_device()
+            if static is None and dynamic is None:
+                return None
+            if (
+                static is None
+                or dynamic is None
+                or static[:3] != dynamic[:3]
+                or len(static[4]) != len(dynamic[4])
+            ):
+                raise ValueError("hybrid acquisition windows diverged")
+            wp.launch(
+                merge_nearest_ranges,
+                dim=len(dynamic[4]),
+                inputs=[static[4], dynamic[4], self.min_range_m],
+                device=self.dynamic.device,
+            )
+            return _host_frame(*dynamic)
+        except Exception:
+            self.failed = True
+            raise
+
+
+class RigidHybridSensor(HybridSensor):
+    """Batch static and moving queries using per-step object-transform histories.
+
+    Each moving source mesh has a fixed local-space BVH. scan() records its
+    inverse world matrix; flush() transforms rays into each object's captured
+    local frame. This retains ordinary step-frozen moving geometry without
+    per-step GPU launches or BVH refits. Affine nonuniform scale is supported.
+    Source meshes must remain undeformed and topology must stay fixed; rebuild
+    after edits, as with the ordinary backend. At most 128 moving source meshes
+    and 100 step captures may be pending. This is opt-in and caller-partitioned.
+    """
+
+    def __init__(self, static_sensor, dynamic_sensor, min_range_m=0.1):
+        super().__init__(static_sensor, dynamic_sensor, min_range_m)
+        if len(dynamic_sensor.paths) > 128:
+            raise ValueError("rigid history supports at most 128 moving source meshes")
+        self.local_meshes = []
+        for path in dynamic_sensor.paths:
+            prim = dynamic_sensor.stage.GetPrimAtPath(path)
+            if prim.IsA(UsdGeom.Mesh):
+                points, indices = _triangles(UsdGeom.Mesh(prim))
+            else:
+                points, indices = _cube(UsdGeom.Cube(prim))
+            self.local_meshes.append(
+                wp.Mesh(
+                    points=wp.array(
+                        points, dtype=wp.vec3, device=dynamic_sensor.device
+                    ),
+                    indices=wp.array(
+                        indices, dtype=wp.int32, device=dynamic_sensor.device
+                    ),
+                )
+            )
+        self.mesh_ids = wp.array(
+            np.array([m.id for m in self.local_meshes], dtype=np.uint64),
+            dtype=wp.uint64,
+            device=dynamic_sensor.device,
+        )
+        self.history = []
+
+    def scan(
+        self,
+        first_index,
+        count,
+        pose_start,
+        pose_end=None,
+        epoch_ns=0,
+        stride=1,
+        defer_readback=True,
+        pose_fraction=(0.0, 1.0),
+    ):
+        """Record sensor endpoints and this step's moving-object inverse matrices.
+
+        Geometry is frozen within each segment, exactly as in ordinary scans.
+        Invalid/removed/singular geometry fails the whole acquisition; discard
+        the instance on error. No GPU work is launched for moving meshes here.
+        """
+        if self.failed:
+            raise ValueError("discard failed rigid hybrid acquisition")
+        if not defer_readback:
+            raise ValueError("rigid hybrid requires explicit flush")
+        try:
+            self.static.scan(
+                first_index,
+                count,
+                pose_start,
+                pose_end,
+                epoch_ns,
+                stride,
+                pose_fraction=pose_fraction,
+            )
+            cache = UsdGeom.XformCache()
+            matrices = []
+            for path in self.dynamic.paths:
+                prim = self.dynamic.stage.GetPrimAtPath(path)
+                if not prim.IsValid():
+                    raise ValueError("moving source removed; rebuild sensor")
+                matrix = cache.GetLocalToWorldTransform(prim)
+                if abs(matrix.GetDeterminant()) < 1e-12:
+                    raise ValueError("singular moving source transform")
+                inverse = np.array(matrix.GetInverse().GetTranspose(), dtype=np.float32)
+                if not np.isfinite(inverse).all():
+                    raise ValueError("nonfinite moving source inverse")
+                matrices.append(inverse)
+            self.history.append(matrices)
+        except Exception:
+            self.failed = True
+            raise
+
+    def flush(self):
+        """Trace both partitions from captured histories and return one owned frame.
+
+        Local ray lengths are converted back to world metres before the nearest
+        hit comparison and min-range filter. Static edits fail closed. No moving
+        object is queried at its final pose on behalf of earlier emissions.
+        """
+        if self.failed:
+            raise ValueError("discard failed rigid hybrid acquisition")
+        if not self.history:
+            return None
+        try:
+            segments = list(self.static.segments)
+            frame = self.static._drain_device()
+            if frame is None or len(segments) != len(self.history):
+                raise ValueError("rigid hybrid histories diverged")
+            device = self.dynamic.device
+            counts = np.array([s[0] for s in segments], dtype=np.int32)
+            offsets = np.r_[0, np.cumsum(counts[:-1])].astype(np.int32)
+            starts = [wp.transform(*s[1]) for s in segments]
+            ends = [wp.transform(*s[2]) for s in segments]
+            fractions = [wp.vec2(*s[3]) for s in segments]
+            matrices = np.array(self.history, dtype=np.float32).reshape(-1, 4, 4)
+            wp.launch(
+                query_rigid_history,
+                dim=(int(counts.max()), len(segments)),
+                inputs=[
+                    wp.array(counts, dtype=wp.int32, device=device),
+                    wp.array(offsets, dtype=wp.int32, device=device),
+                    wp.array(starts, dtype=wp.transform, device=device),
+                    wp.array(ends, dtype=wp.transform, device=device),
+                    wp.array(fractions, dtype=wp.vec2, device=device),
+                    wp.array(matrices, dtype=wp.mat44, device=device),
+                    self.mesh_ids,
+                    len(self.local_meshes),
+                    self.min_range_m,
+                    self.dynamic.max_range_m,
+                    frame[3],
+                    frame[4],
+                ],
+                device=device,
+            )
+            result = _host_frame(*frame)
+            self.history.clear()
+            return result
+        except Exception:
+            self.failed = True
+            raise

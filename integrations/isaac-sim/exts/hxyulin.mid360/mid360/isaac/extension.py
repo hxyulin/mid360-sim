@@ -9,24 +9,46 @@ import omni.timeline
 import omni.usd
 from pxr import Gf, Sdf, UsdGeom
 
-from .backend import Mid360Sensor
+from .backend import Mid360Sensor, StaticSceneBatch, HybridSensor, RigidHybridSensor
 
 _ACTIVE = None
 
 
 def create_sensor(
-    stage, path="/World/Mid360", roots=("/World",), exclude=(), batch_steps=1
+    stage,
+    path="/World/Mid360",
+    roots=("/World",),
+    exclude=(),
+    batch_steps=1,
+    static_trace=False,
+    dynamic_roots=(),
+    rigid_trace=False,
 ):
     """Create an opt-in sensor Xform; configure before starting the timeline.
 
     Attaching the prim beneath a robot mounts it to that robot. Optical roots
     select actual visible triangle meshes/cubes, not PhysX collision proxies.
-    batch_steps (1..100) delays host output while keeping per-step queries.
+    batch_steps (1..100) delays host output. static_trace additionally delays
+    GPU tracing, retaining segment poses; all selected optical geometry must
+    remain static during each batch. dynamic_roots instead partitions moving
+    geometry; rigid_trace records fixed-mesh object transforms for batched
+    moving queries. The default traces the full scene each step.
     """
     if not isinstance(batch_steps, int) or not 1 <= batch_steps <= 100:
         raise ValueError("batch_steps must be in 1..100")
+    if rigid_trace and not dynamic_roots:
+        raise ValueError("rigid_trace requires dynamic_roots")
+    if static_trace and dynamic_roots:
+        raise ValueError("static_trace and dynamic_roots are separate execution modes")
+    if any(
+        not any(d == r or d.startswith(r + "/") for r in roots) for d in dynamic_roots
+    ):
+        raise ValueError("dynamic roots must be within optical roots")
     prim = UsdGeom.Xform.Define(stage, path).GetPrim()
     for key, typ, value in [
+        ("mid360:rigidTrace", Sdf.ValueTypeNames.Bool, rigid_trace),
+        ("mid360:dynamicRoots", Sdf.ValueTypeNames.StringArray, list(dynamic_roots)),
+        ("mid360:staticTrace", Sdf.ValueTypeNames.Bool, static_trace),
         ("mid360:batchSteps", Sdf.ValueTypeNames.Int, batch_steps),
         ("mid360:enabled", Sdf.ValueTypeNames.Bool, True),
         ("mid360:roots", Sdf.ValueTypeNames.StringArray, list(roots)),
@@ -53,7 +75,17 @@ def _pose(stage, path):
 
 
 class Extension(omni.ext.IExt):
-    """One GPU backend per opt-in sensor; simulation controls all acquisition."""
+    """One GPU backend per opt-in sensor; simulation controls all acquisition.
+
+    Optional pose_reader(stage, sensor_path) returns a metre/xyzw world pose.
+    A caller using native physics must apply sensor extrinsics and synchronize
+    that pose to the callback's step. The default reader uses USD writeback."""
+
+    def __init__(self, pose_reader=None):
+        super().__init__()
+        # Trusted in-process adapters may supply authoritative physics poses.
+        # The reader receives (stage, sensor_path) and returns metre/xyzw pose.
+        self.pose_reader = _pose if pose_reader is None else pose_reader
 
     def on_startup(self, ext_id):
         global _ACTIVE
@@ -111,14 +143,48 @@ class Extension(omni.ext.IExt):
                 attr = prim.GetAttribute("mid360:enabled")
                 if attr and attr.Get():
                     path = str(prim.GetPath())
-                    self.sensors[path] = Mid360Sensor(
+                    attr = prim.GetAttribute("mid360:dynamicRoots")
+                    dynamic_roots = tuple(attr.Get()) if attr else ()
+                    roots = tuple(prim.GetAttribute("mid360:roots").Get())
+                    exclude = tuple(prim.GetAttribute("mid360:exclude").Get())
+                    minimum = float(prim.GetAttribute("mid360:minRangeM").Get())
+                    maximum = float(prim.GetAttribute("mid360:maxRangeM").Get())
+                    static_trace = prim.GetAttribute("mid360:staticTrace")
+                    static_trace = bool(static_trace and static_trace.Get())
+                    if static_trace and dynamic_roots:
+                        raise ValueError(
+                            "static_trace and dynamic_roots are separate execution modes"
+                        )
+                    if any(
+                        not any(d == r or d.startswith(r + "/") for r in roots)
+                        for d in dynamic_roots
+                    ):
+                        raise ValueError("dynamic roots must be within optical roots")
+                    backend = Mid360Sensor(
                         stage,
-                        roots=prim.GetAttribute("mid360:roots").Get(),
-                        exclude=prim.GetAttribute("mid360:exclude").Get(),
-                        min_range_m=float(prim.GetAttribute("mid360:minRangeM").Get()),
-                        max_range_m=float(prim.GetAttribute("mid360:maxRangeM").Get()),
+                        roots=roots,
+                        exclude=exclude + dynamic_roots,
+                        min_range_m=0.0 if dynamic_roots else minimum,
+                        max_range_m=maximum,
                     )
-                    self.previous[path] = _pose(stage, path)
+                    rigid_trace = prim.GetAttribute("mid360:rigidTrace")
+                    rigid_trace = bool(rigid_trace and rigid_trace.Get())
+                    if rigid_trace and not dynamic_roots:
+                        raise ValueError("rigid_trace requires dynamic_roots")
+                    if dynamic_roots:
+                        moving = Mid360Sensor(
+                            stage,
+                            roots=dynamic_roots,
+                            exclude=exclude,
+                            min_range_m=0.0,
+                            max_range_m=maximum,
+                        )
+                        factory = RigidHybridSensor if rigid_trace else HybridSensor
+                        backend = factory(backend, moving, min_range_m=minimum)
+                    elif static_trace:
+                        backend = StaticSceneBatch(backend)
+                    self.sensors[path] = backend
+                    self.previous[path] = self.pose_reader(stage, path)
                     attr = prim.GetAttribute("mid360:batchSteps")
                     batch_steps = attr.Get() if attr else 1
                     if not isinstance(batch_steps, int) or not 1 <= batch_steps <= 100:
@@ -131,21 +197,22 @@ class Extension(omni.ext.IExt):
         until = (end_ns + 4999) // 5000
         count = until - self.next_index
         for path, sensor in self.sensors.items():
-            current = _pose(stage, path)
-            # Interpolate poses at the selected emission endpoints, not merely
-            # the physics step boundaries. Geometry stays at this step's capture.
+            current = self.pose_reader(stage, path)
+            # GPU interpolation uses each ray's fraction of this physics step.
+            # Avoid composing two CPU endpoint interpolations with GPU SLERP.
             old = self.previous[path]
-            poses = []
-            for t in [self.next_index * 5000, (until - 1) * 5000]:
-                f = max(0.0, min(1.0, (t - begin_ns) / max(1, end_ns - begin_ns)))
-                position = tuple(a + (b - a) * f for a, b in zip(old[0], current[0]))
-                qa = Gf.Quatd(old[1][3], Gf.Vec3d(*old[1][:3]))
-                qb = Gf.Quatd(current[1][3], Gf.Vec3d(*current[1][:3]))
-                q = Gf.Slerp(f, qa, qb)
-                poses.append((position, (*q.GetImaginary(), q.GetReal())))
             if count > 0:
+                fractions = tuple(
+                    max(0.0, min(1.0, (t - begin_ns) / max(1, end_ns - begin_ns)))
+                    for t in (self.next_index * 5000, (until - 1) * 5000)
+                )
                 sensor.scan(
-                    self.next_index, count, poses[0], poses[1], defer_readback=True
+                    self.next_index,
+                    count,
+                    old,
+                    current,
+                    pose_fraction=fractions,
+                    defer_readback=True,
                 )
                 self.batch_counts[path] += 1
                 if self.batch_counts[path] >= self.batch_steps[path]:

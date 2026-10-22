@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2026 hxyulin <hxyulin@proton.me>
 #include "mid360/pattern.hh"
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <fstream>
@@ -14,6 +15,7 @@
 #include <gz/sim/components/World.hh>
 #include <gz/transport/Node.hh>
 #include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 namespace mid360 {
@@ -24,6 +26,16 @@ class Mid360 final : public gz::sim::System,
                      public gz::sim::ISystemPreUpdate,
                      public gz::sim::ISystemPostUpdate,
                      public gz::sim::ISystemReset {
+public:
+  ~Mid360() override {
+    if (this->profile.is_open()) {
+      this->profile << "{\"steps\":" << this->profileSteps
+                    << ",\"pre_ms\":" << this->preMs
+                    << ",\"physics_scheduler_gap_ms\":" << this->gapMs
+                    << ",\"post_ms\":" << this->postMs << "}\n";
+    }
+  }
+
 public:
   void Configure(const gz::sim::Entity &entity,
                  const std::shared_ptr<const sdf::Element> &sdf,
@@ -60,6 +72,15 @@ public:
       return;
     }
     ecm.CreateComponent(this->mount, gz::sim::components::RaycastData());
+    const auto profilePath = sdf->Get<std::string>("profile_file", "").first;
+    if (!profilePath.empty()) {
+      this->profile.open(profilePath);
+      if (!this->profile) {
+        gzerr << "MID360: cannot open profile report\n";
+        return;
+      }
+    }
+    this->bytes.reserve(20000 * 20);
     this->enabled = true;
   }
 
@@ -83,6 +104,8 @@ public:
                  gz::sim::EntityComponentManager &ecm) override {
     if (!this->enabled || info.paused)
       return;
+    const auto begin =
+        this->profile.is_open() ? Clock::now() : Clock::time_point{};
     const auto world = ecm.EntityByComponents(gz::sim::components::World());
     const auto detector =
         ecm.Component<gz::sim::components::PhysicsCollisionDetector>(world);
@@ -122,13 +145,24 @@ public:
     this->pending = static_cast<std::size_t>(available);
     this->pendingFirst = this->next;
     data.rays.reserve(this->pending);
+    std::optional<DirectionGroup> optics;
+    std::uint64_t previousGroup = std::numeric_limits<std::uint64_t>::max();
     for (std::size_t i = 0; i < this->pending; ++i) {
-      const auto d = Direction(this->next + i * this->stride);
+      const auto index = this->next + i * this->stride;
+      if (index / 4 != previousGroup) {
+        optics.emplace(index);
+        previousGroup = index / 4;
+      }
+      const auto d = optics->Lane(index % 4);
       data.rays.push_back(
           {gz::math::Vector3d::Zero,
            gz::math::Vector3d(d[0], d[1], d[2]) * this->maximum});
     }
     this->next += available * this->stride;
+    if (this->profile.is_open()) {
+      this->preEnd = Clock::now();
+      this->preMs += Milliseconds(this->preEnd - begin).count();
+    }
   }
 
 private:
@@ -182,7 +216,7 @@ private:
     message.set_is_bigendian(false);
     message.set_data(this->bytes);
     this->publisher.Publish(message);
-    if (this->journal) {
+    if (this->journal.is_open()) {
       this->journal << "{\"first_index\":" << this->first
                     << ",\"scheduled\":" << this->scheduled
                     << ",\"points\":" << message.width()
@@ -200,6 +234,10 @@ public:
                   const gz::sim::EntityComponentManager &ecm) override {
     if (!this->enabled || info.paused || this->pending == 0)
       return;
+    const auto begin =
+        this->profile.is_open() ? Clock::now() : Clock::time_point{};
+    if (this->profile.is_open())
+      this->gapMs += Milliseconds(begin - this->preEnd).count();
     const auto &data =
         ecm.Component<gz::sim::components::RaycastData>(this->mount)->Data();
     if (data.results.size() != this->pending) {
@@ -241,7 +279,19 @@ public:
         this->Publish();
     }
     this->pending = 0;
+    if (this->profile.is_open()) {
+      this->postMs += Milliseconds(Clock::now() - begin).count();
+      ++this->profileSteps;
+    }
   }
+
+private:
+  using Clock = std::chrono::steady_clock;
+  using Milliseconds = std::chrono::duration<double, std::milli>;
+  std::ofstream profile;
+  Clock::time_point preEnd;
+  double preMs = 0, gapMs = 0, postMs = 0;
+  std::uint64_t profileSteps = 0;
 
 private:
   gz::sim::Entity mount = gz::sim::kNullEntity;

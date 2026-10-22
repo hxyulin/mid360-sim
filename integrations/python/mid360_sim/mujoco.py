@@ -91,3 +91,107 @@ class MujocoSensor:
         return ScanFrame(
             first_index, stride, epoch_ns, local, ranges.copy(), ids.copy()
         )
+
+    def scan_rolling(
+        self,
+        first_index,
+        count,
+        pose_start,
+        pose_end,
+        epoch_ns=0,
+        stride=1,
+        origin_tolerance_m=0.0005,
+        pose_fraction=(0.0, 1.0),
+    ):
+        """Interpolate caller-supplied sensor poses without advancing physics.
+
+        Poses are (metre translation, xyzw unit quaternion). They correspond
+        to first/last emissions unless pose_fraction selects a subinterval
+        of boundary poses. Rotations use shortest-arc SLERP per emission.
+        Native mj_multiRay shares one origin: split translation into bounded
+        groups, using their midpoint origins. origin_tolerance_m bounds that
+        origin displacement, NOT range error at grazing surfaces. Scene/body
+        geometry is the current mjData throughout; callers own its history.
+        Defaults remain unchanged for ordinary scan().
+        """
+        validate_window(first_index, count, stride, epoch_ns)
+        if not np.isfinite(origin_tolerance_m) or origin_tolerance_m <= 0:
+            raise ValueError("origin_tolerance_m must be positive and finite")
+        fraction = np.asarray(pose_fraction, dtype=float)
+        if (
+            fraction.shape != (2,)
+            or not np.isfinite(fraction).all()
+            or not 0 <= fraction[0] <= fraction[1] <= 1
+        ):
+            raise ValueError("invalid pose subinterval")
+        poses = []
+        for pose in (pose_start, pose_end):
+            if len(pose) != 2:
+                raise ValueError("pose must contain translation and xyzw quaternion")
+            p, q = (np.asarray(v, dtype=float) for v in pose)
+            if (
+                p.shape != (3,)
+                or q.shape != (4,)
+                or not np.isfinite(p).all()
+                or not np.isfinite(q).all()
+            ):
+                raise ValueError("invalid pose")
+            norm = np.linalg.norm(q)
+            if abs(norm - 1) > 1e-3:
+                raise ValueError("need unit xyzw quaternion")
+            poses.append((p, q / norm))
+        (p0, q0), (p1, q1) = poses
+        dot = float(np.dot(q0, q1))
+        if dot < 0:
+            q1, dot = -q1, -dot
+        t = np.linspace(fraction[0], fraction[1], count)
+        if dot > 0.99999999:
+            q = q0 + t[:, None] * (q1 - q0)
+            q /= np.linalg.norm(q, axis=1)[:, None]
+        else:
+            angle = np.arccos(np.clip(dot, -1.0, 1.0))
+            q = (
+                np.sin((1 - t) * angle)[:, None] * q0 + np.sin(t * angle)[:, None] * q1
+            ) / np.sin(angle)
+        local = directions(first_index, count, stride)
+        # Unit-quaternion vector rotation; no SciPy dependency or per-ray loop.
+        world = local + 2 * np.cross(
+            q[:, :3], np.cross(q[:, :3], local) + q[:, 3, None] * local
+        )
+        distance = float(np.linalg.norm(p1 - p0)) * float(fraction[1] - fraction[0])
+        if not np.isfinite(distance):
+            raise ValueError("nonfinite pose displacement")
+        groups = max(1, int(np.ceil(min(count, distance / (2 * origin_tolerance_m)))))
+        if count > self.capacity:
+            self.capacity = count
+            self._ranges = np.empty(count, dtype=np.float64)
+            self._ids = np.empty(count, dtype=np.int32)
+        for group in range(groups):
+            a, b = group * count // groups, (group + 1) * count // groups
+            origin = np.ascontiguousarray(p0 + (p1 - p0) * ((t[a] + t[b - 1]) * 0.5))
+            rays = np.ascontiguousarray(world[a:b])
+            mujoco.mj_multiRay(
+                self.model,
+                self.data,
+                origin,
+                rays.ravel(),
+                self.geom_groups,
+                1,
+                self.body_exclude,
+                self._ids[a:b],
+                self._ranges[a:b],
+                None,
+                b - a,
+                self.max_range_m,
+            )
+        ranges, ids = self._ranges[:count], self._ids[:count]
+        invalid = (
+            (ranges < self.min_range_m)
+            | (ranges > self.max_range_m)
+            | ~np.isfinite(ranges)
+        )
+        ranges[invalid] = -1
+        ids[invalid] = -1
+        return ScanFrame(
+            first_index, stride, epoch_ns, local, ranges.copy(), ids.copy()
+        )

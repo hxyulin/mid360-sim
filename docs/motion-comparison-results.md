@@ -178,3 +178,6 @@ The report includes decomposition, range bins, inherited train/evaluation masks,
 per-cloud improvement counts, grid phases, floor residuals and controlled cases.
 The added math regressions cover stop fallback, smooth acceleration, endpoints
 and quaternion-sign invariance. The default runtime continues to use SLERP.
+
+The later [native backend replay](backend-ground-truth.md) runs all three actual
+adapters on a shared measured-motion segment inside an exact synthetic enclosure.

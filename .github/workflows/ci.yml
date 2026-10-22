@@ -39,6 +39,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m pip install './integrations/python[mujoco]' '${{ matrix.mujoco }}'
       - run: python -m unittest discover -s integrations/python/tests -v
+      - run: python -m unittest discover -s integrations/isaac-sim/tests -p test_prepare_arena.py -v
       - run: python scripts/check-motion-distortion.py --mujoco
   analysis:
     runs-on: ubuntu-24.04
@@ -50,6 +51,7 @@ jobs:
       - run: python -m pip install -r requirements-analysis.txt
       - run: python -W error scripts/test-motion-comparison.py
       - run: python scripts/test-external-capture.py
+      - run: python -W error scripts/test-backend-ground-truth.py
   gazebo:
     runs-on: ubuntu-24.04
     steps:

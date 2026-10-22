@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <fstream>
 #include <gz/common/Console.hh>
 #include <gz/msgs/pointcloud_packed.pb.h>
 #include <gz/sim/Server.hh>
@@ -29,7 +30,31 @@ float ReadFloat(const std::string &s, std::size_t at) {
 }
 } // namespace
 int main(int argc, char **argv) {
-  if (argc != 2)
+  if (argc < 2 || argc > 4)
+    return 2;
+  const std::string replayPrefix = "--replay-output=";
+  const bool replay =
+      argc >= 3 && std::string(argv[2]).rfind(replayPrefix, 0) == 0;
+  std::ofstream replayOutput;
+  std::uint64_t iterations = 2000;
+  if (argc == 4) {
+    const std::string prefix = "--iterations=";
+    if (!replay || std::string(argv[3]).rfind(prefix, 0) != 0)
+      return 2;
+    iterations = std::stoull(std::string(argv[3]).substr(prefix.size()));
+    if (iterations < 2000 || iterations > 40000)
+      return 2;
+  }
+  if (replay) {
+    replayOutput.open(std::string(argv[2]).substr(replayPrefix.size()),
+                      std::ios::binary);
+    if (!replayOutput)
+      return 2;
+  }
+  const bool baseline = argc == 3 && std::string(argv[2]) == "--baseline";
+  const bool benchmark =
+      replay || (argc == 3 && std::string(argv[2]) == "--benchmark");
+  if (argc == 3 && !baseline && !benchmark)
     return 2;
   gz::common::Console::SetVerbosity(4);
   gz::sim::ServerConfig config;
@@ -37,7 +62,7 @@ int main(int argc, char **argv) {
   gz::sim::Server server(config);
   gz::transport::Node node;
   std::mutex mutex;
-  std::size_t frames = 0, points = 0;
+  std::size_t frames = 0, points = 0, expectedFrames = 20;
   std::string error;
   if (!node.Subscribe<gz::msgs::PointCloudPacked>(
           "/mid360/points", [&](const gz::msgs::PointCloudPacked &msg) {
@@ -64,6 +89,8 @@ int main(int argc, char **argv) {
             for (const auto &data : msg.header().data())
               if (data.key() == "stride" && data.value_size() == 1)
                 stride = std::stoull(data.value(0));
+            expectedFrames = ((400000 + stride - 1) / stride) /
+                             ((20000 + stride - 1) / stride);
             if (msg.width() != (20000 + stride - 1) / stride) {
               error = "missing enclosure returns";
               return;
@@ -76,7 +103,7 @@ int main(int argc, char **argv) {
               error = "wrong timebase";
               return;
             }
-            for (std::size_t i = 0; i < msg.width(); ++i) {
+            for (std::size_t i = 0; !benchmark && i < msg.width(); ++i) {
               const auto at = i * 20;
               const auto offset = Read32(msg.data(), at + 12);
               if (offset % 5000) {
@@ -103,26 +130,42 @@ int main(int argc, char **argv) {
                   return;
                 }
             }
+            if (replay)
+              replayOutput.write(msg.data().data(), msg.data().size());
             ++frames;
             points += msg.width();
           }))
     return 3;
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
-  const auto start = std::chrono::steady_clock::now();
-  if (!server.Run(true, 2000, false))
+  // Exclude engine construction / first-step initialization from throughput.
+  const std::uint64_t warmup = !replay && (baseline || benchmark) ? 100 : 0;
+  if (warmup && !server.Run(true, warmup, false))
     return 4;
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    frames = 0;
+    points = 0;
+  }
+  const auto start = std::chrono::steady_clock::now();
+  if (!server.Run(true, iterations, false))
+    return 4;
+  if (server.IterationCount().value_or(0) != iterations + warmup)
+    return 5;
   const double elapsed = std::chrono::duration<double, std::milli>(
                              std::chrono::steady_clock::now() - start)
                              .count();
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
   std::lock_guard<std::mutex> lock(mutex);
-  if (!error.empty() || frames < 5) {
+  if (!error.empty() || (!baseline && frames != expectedFrames) ||
+      (baseline && frames != 0)) {
     std::cerr << "native test failed: " << error << " frames=" << frames
               << "\n";
     return 1;
   }
-  std::cout << "MID360_GAZEBO_RESULT {\"frames\":" << frames
+  std::cout << "MID360_GAZEBO_RESULT {\"baseline\":"
+            << (baseline ? "true" : "false") << ",\"frames\":" << frames
             << ",\"validated_points\":" << points
-            << ",\"simulation_steps\":2000,\"simulated_s\":2,\"run_ms\":"
-            << elapsed << "}\n";
+            << ",\"simulation_steps\":" << iterations
+            << ",\"simulated_s\":2,\"run_ms\":" << elapsed << "}\n";
 }

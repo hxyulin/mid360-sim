@@ -6,6 +6,43 @@
 
 ### Integrations
 
+- Add owned bulk pose histories for Isaac static-scene tracing, reducing
+  Python/transfer overhead while retaining per-emission motion and bounds.
+- Add opt-in MuJoCo rolling sensor poses with per-ray quaternion interpolation
+  and a configurable bound on grouped ray-origin displacement.
+- Benchmark the actual pinned Livox Gazebo Classic plugin against measured
+  motion, with explicit timestamp assumptions, headless PhysX tuning and
+  separate sensor versus engine-loop runtime/accuracy tradeoffs.
+
+- Replay measured motion through native RTX Motion BVH at multiple update
+  rates, collect complete scans through a render writer and diagnose polling
+  coverage separately. Share the custom RTX profile between test harnesses.
+- Attribute MuJoCo/Gazebo replay error to pose holding, validate 200 us native
+  acquisition and add phase, range/incidence and timestamp sensitivity reports.
+
+- Replay a common independent MoCap trajectory through native MuJoCo/Gazebo
+  and both Isaac Warp paths, with analytic per-emission geometry references,
+  timing-policy diagnostics and reproducible source checksums.
+
+- Share Gazebo optical phases across each four-lane group, reserve output
+  capacity and add opt-in CPU phase profiling and warmed native benchmarks.
+- Compare Isaac's native RTX LiDAR with a custom repeating MID-360-spec rotary
+  profile, explicit Motion BVH controls, analytic moving-room checks, preserved
+  acquisition offsets and a matched-scene Warp run.
+
+- Add caller-owned RM2027 arena / neutral CAD robot acquisition benchmarks with
+  source checksum/provenance records, robot-count scaling and union-hit checks.
+
+- Add explicit static/dynamic Isaac optical partitions with GPU nearest-hit
+  merging before minimum-range filtering, preserving near-surface occlusion.
+- Probe batched rigid-object transform histories against fixed local-space BVHs,
+  and add matched moving-obstacle benchmarks and combined-scene equivalence tests.
+
+- Add opt-in segmented GPU tracing for static optical geometry, retaining each
+  physics step's sensor motion and rejecting scene changes during delayed tracing.
+- Move pose-subinterval interpolation to the GPU and allow trusted in-process
+  pose readers; benchmark USD versus native physics pose access separately.
+
 - Batch Isaac GPU readback independently of physics-step acquisition, cache
   unchanged USD geometry transforms, and reduce per-query Python allocations.
   Keep immediate output as the default and bound deferred GPU storage.

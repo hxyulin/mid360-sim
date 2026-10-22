@@ -215,7 +215,8 @@ is unsupported. The host reads only the populated output slice.
 
 USD change notices invalidate the cached geometry transforms when source prims
 or their ancestors change; unchanged geometry avoids repeated transform walks.
-Scenes containing instance proxies retain conservative per-query refreshes.
+Scenes containing instance proxies or physics-driven geometry retain conservative
+per-query refreshes.
 Topology/deformation changes still require rebuilding the backend. Per-step
 pose validation avoids NumPy array allocations. These changes add no threads
 or second physics world.
@@ -249,3 +250,272 @@ frames, buffer growth, queued queries across moving geometry, ancestor transform
 invalidation, and playback pause/reset. No claim is made for detailed-arena
 performance or a maximum deadline. Use 10 ms readback for lower output latency,
 or 100 ms when publishing at 10 Hz. Raw reports are `local-assets/realtime/final-*.json`.
+
+### Alternative execution: segmented tracing of static geometry
+
+`create_sensor(..., batch_steps=100, static_trace=True)` opts into **static
+optical geometry**. Instead of launching 100 small tracing kernels, the adapter
+records each step's sensor boundary poses and emission fractions, then traces
+all 100 segments in one GPU launch. Each segment retains its own translation
+and rotation, so turns and changes of velocity between steps remain represented.
+This is not a single interpolation across the whole 100 ms publication window.
+
+All selected optical geometry must stay fixed while a batch is pending. Source
+or ancestor USD edits cause an error before tracing; there is no automatic
+fallback that traces historical poses against newly moved objects. Instance
+proxies and physics-driven geometry/ancestors are rejected for this mode. Use the default per-step tracing for scenes
+including moving robot geometry, self-occlusion or moving obstacles. See the explicit static/dynamic partition modes below for retaining moving
+bodies while batching fixed arena queries.
+New topology/deformations still require rebuilding the backend in either mode.
+
+Direct callers can wrap an idle backend in `StaticSceneBatch(sensor)`, record
+contiguous `scan(...)` segments and call `flush()`. Storage is bounded to 100
+segments and 200,000 rays. Static batches own copies of their input poses.
+
+Both tracing architectures now accept `pose_fraction=(first, last)`: the GPU
+maps emissions into that subinterval of the supplied pose pair. The extension
+passes raw physics-step boundary poses, avoiding two CPU interpolations followed
+by another GPU interpolation. Defaults preserve the direct API's first/last
+emission convention. Tests compare subinterval tracing against explicit CPU
+endpoint interpolation and compare nonlinear, variable-sized, strided segments
+against ordinary per-step queries.
+
+```sh
+./python.sh /path/mid360-sim/integrations/isaac-sim/tests/realtime.py \
+  --steps 10000 --batch-steps 100 --static-trace \
+  --output /writable/path/static-trace.json
+```
+
+Trusted in-process adapters may also construct `Extension(pose_reader=reader)`.
+The reader receives `(stage, sensor_path)` and returns a world pose in metres
+with an xyzw unit quaternion. It owns extrinsic transforms and synchronization
+with the callback's physics step; the default reader uses USD. The benchmark's
+`--pose-source physics` probes the native PhysX rigid-body pose interface for its
+specific identity-mounted sensor. It is not a general robot mount resolver.
+
+Measured architecture probes on Talos, each with 1 ms physics, 100 ms output,
+10 simulated seconds and two million rays:
+
+| Tracing architecture / pose reader | Wall time | Real-time factor | Step p95 |
+|---|---:|---:|---:|
+| Prior per-step tracing, CPU endpoint interpolation / USD | 6.187 s | 1.616× | 0.719 ms |
+| Per-step tracing, GPU subinterval interpolation / USD | 5.855 s | 1.708× | 0.686 ms |
+| Segmented static tracing, GPU subinterval interpolation / USD | 4.751 s | 2.105× | 0.560 ms |
+| Per-step tracing, GPU subinterval interpolation / native PhysX probe | 6.004 s | 1.666× | 0.691 ms |
+| Segmented static tracing, GPU subinterval interpolation / native PhysX probe | 4.959 s | 2.017× | 0.572 ms |
+
+The static/USD case's physics-only baseline was 3.425 s (2.919×). Native pose
+access did not win in these single runs; USD remains the default. Results are
+simple-room throughput probes, not controlled hardware-wide benchmarks or hard
+real-time guarantees. The static case still had 117 of 10,000 steps over 1 ms.
+It cannot replace moving-geometry acquisition without explicit scene partitioning.
+Reports are retained in ignored `local-assets/realtime/architecture-*.json`
+and `native2-pose-*.json`. The native diagnostic additionally samples
+position and sign-invariant quaternion differences against USD during callbacks;
+its identity-mount mapping is not a production extrinsics implementation.
+
+The native diagnostic sampled 101 callbacks. Maximum native-versus-USD position
+difference was 0.1000 mm, consistent with one 1 ms translation step at the
+benchmark's 0.1 m/s velocity. Maximum sign-invariant normalized quaternion
+Euclidean difference was 0.000151. After `sim.step()` returned, the body poses
+agreed within the test tolerances. These callbacks therefore must not be assumed
+to expose interchangeable snapshots; native throughput numbers are architecture
+probes, not proof of equivalent acquisition timing. USD remains the default.
+Physics-driven optical geometry also bypasses notice-only transform caching:
+PhysX writeback need not emit ordinary USD authoring notices.
+
+### Static/dynamic scene partitions
+
+Set `dynamic_roots=("/World/Robots", "/World/MovingTargets")` on
+`create_sensor(...)` to opt into a split scene. Dynamic roots must lie within
+`roots`; they are removed from the static partition and loaded into a separate
+optical BVH. Each partition must contain geometry. The dynamic partition retains
+per-step capture/tracing; the static partition uses retained sensor poses and
+batched tracing. This can retain self-occlusion by including the robot's meshes
+in the dynamic roots. No bodies or second physics world are created.
+
+Both partitions query raw nearest hits down to zero distance. Their ranges are
+merged on the GPU **before** applying the configured minimum range, so a near
+opaque surface in either partition blocks farther geometry. One owned host
+frame is read back after merging. Overlapping partitions and changed static
+geometry are rejected. The direct API is `HybridSensor(static_backend,
+dynamic_backend, min_range_m=0.1)`; both underlying backends must have zero
+minimum range, matching maximum range, stage and device, and disjoint source
+paths. They are exclusively owned by the hybrid acquisition while in use.
+
+A second opt-in mode, `rigid_trace=True` with `dynamic_roots`, records the moving
+objects' inverse transforms each step and queries fixed local-space BVHs at
+publication time. Each mesh must keep its original local geometry/topology;
+rebuild after edits/deformations. Sensor motion remains interpolated per ray;
+moving-object geometry stays frozen per step, matching the ordinary backend.
+Nonuniform affine scale is handled by converting local hit distances back to
+world metres before nearest-hit selection. This avoids per-step GPU updates,
+launches and BVH refits, but loops over the moving meshes per ray. It is capped
+at 128 moving source meshes, 100 step captures and 200,000 rays per batch. This
+is an experimental explicit partition, not automatic scene classification.
+
+The direct API for this variant is `RigidHybridSensor(static_backend,
+dynamic_backend, min_range_m=0.1)`. A failed acquisition must be discarded;
+partial partition results are never published. Static-only tracing and hybrid
+configuration are mutually exclusive. The default execution mode is unchanged.
+
+Reproduce matched moving-obstacle tests with either the combined-scene default,
+`--hybrid`, or `--hybrid --rigid-trace`:
+
+```sh
+./python.sh /path/mid360-sim/integrations/isaac-sim/tests/realtime.py \
+  --steps 2000 --batch-steps 100 --moving-obstacle --static-boxes 64 \
+  --hybrid --output /writable/path/hybrid.json
+./python.sh /path/mid360-sim/integrations/isaac-sim/tests/hybrid.py \
+  --output /writable/path/hybrid-check.json
+```
+
+Add `--rigid-trace` to the correctness test to check that architecture. The
+correctness test compares union hits, local directions and original timestamps
+against ordinary combined-scene queries across moving objects and turning
+sensors. It separately checks near-hit shadowing from each partition, owned
+outputs and failure after static edits. Benchmarks include one translating/
+rotating rigid obstacle, a translating/rotating sensor, and optional independent
+static cubes, with physics-only baselines. They exclude rendering and ROS/network
+publication. Part counts are synthetic source prims, not detailed-arena results.
+
+Matched Talos results (1 kHz physics, 200,000 rays/s, 100 ms output, USD poses),
+with a moving sensor and one translating/rotating obstacle:
+
+| Optical scene / mode | Simulated duration | Wall time | Real-time factor | Step p95 |
+|---|---:|---:|---:|---:|
+| Enclosure + obstacle, combined | 2 s | 1.663 s | 1.203× | 0.954 ms |
+| Enclosure + obstacle, split per-step moving BVH | 2 s | 1.715 s | 1.166× | 0.980 ms |
+| +64 static parts, combined | 10 s | 10.624 s | 0.941× | 1.353 ms |
+| +64 static parts, split per-step moving BVH | 10 s | 8.333 s | 1.200× | 0.930 ms |
+| +64 static parts, batched rigid histories | 10 s | 5.677 s | 1.761× | 0.630 ms |
+
+The 64-part scene has 66 source cubes / 792 optical triangles in total, including
+the enclosure and moving obstacle. The longer runs each processed two million
+rays into 100 frames. Batched rigid histories reduced total wall time by 46.6%
+versus the combined scene, increasing throughput by 87.1%. It still had 122 of
+10,000 steps above 1 ms. Its physics-only baseline was 3.651 s. The split
+per-step variant adds overhead in the nearly empty scene; explicit partitioning
+is not automatically faster. These are single synthetic-scene runs, not
+arena-scale or full robot-dynamics benchmarks. The rigid-history path remains
+opt-in; moving mesh count, topology and scene complexity need separate profiling.
+
+Both partition correctness tests cover two nested moving meshes, nonuniform and
+reflected scales, rotation/translation, a turning sensor, odd segment sizes and
+stride 3. Across 4,849 sampled rays, per-step splitting matched the combined
+ranges exactly; batched local-space queries differed by at most 0.00000525 m
+(approximately 5 micrometres). This is numerical agreement on the test scene,
+not a hardware precision estimate. Both retained all emission timestamps and
+passed near-hit shadowing in each partition, output ownership and static-edit
+failure checks. Raw reports are in ignored `local-assets/realtime/partition-*`.
+
+### Caller-owned arena / CAD robot benchmark
+
+`tests/prepare_arena.py` reads a caller-provided RMUC 2027 runtime field package
+and bound neutral robot GLB, verifies manifest checksums, applies glTF graph
+transforms and manifest placements, and writes ignored triangle arrays. No
+source geometry is included in this repository or release. Field ownership
+notices and robot attribution remain attached to the caller's inputs/metadata.
+It uses visual triangles, not collision proxies. Equipment remains in rest pose.
+
+```sh
+python integrations/isaac-sim/tests/prepare_arena.py \
+  --field /path/to/field-2027 --robot /path/to/bound-tunnel-sentry/neutral.glb \
+  --output local-assets/realtime/arena-input.npz
+./python.sh /path/mid360-sim/integrations/isaac-sim/tests/arena.py \
+  --input /writable/path/arena-input.npz --robots 4 --mode rigid --steps 2000 \
+  --output /writable/path/arena-rigid4.json
+```
+
+The fixed field components and each robot are merged into mesh groups without
+removing triangles, preserving placements. Robot GLB X-left/Y-up/Z-forward is
+mapped to FLU; its root is shifted vertically to place the lowest vertex at zero.
+Neutral robot poses remain fixed internally. Robot roots translate and rotate
+as unconstrained zero-gravity PhysX bodies, including the sensor's own robot;
+this is not a wheel, suspension, folding or contact-dynamics benchmark. The
+sensor uses a 0.45 m mount offset. Static geometry stays in the same USD scene.
+
+`--mode combined`, `--mode hybrid` and `--mode rigid` select the three acquisition
+architectures against identical geometry and root motion. `--robots` accepts
+1, 4 or 8 and `--steps` accepts multiples of 100 through 10,000. Each run includes
+a physics-only baseline and 100 warmup steps; startup, mesh/BVH construction and
+shader compilation are excluded. One sensor emits 200 rays every 1 ms and reads
+100 ms frames. Reports separate scheduled rays from valid returns; misses into
+the open sky are expected. Rendering and ROS/network output are excluded.
+
+`--verify` additionally compares 5,000 sampled rays against ordinary combined
+queries on the same moving scene, outside the timed run. Hit/miss masks and
+emission timestamps must agree, and range differences must remain below 1 mm.
+The CPU-only GLB preparation regression checks shared mesh instances, interleaved
+vertex buffers, column-major matrices, TRS composition and reflected transforms.
+
+Measured Talos arena results use the supplied RM2027 runtime Low visual package
+(355,542 triangles, complete equipment at rest) and neutral EGA tunnel-Sentry
+CAD (222,900 triangles per robot), at 1 kHz and 200,000 scheduled rays/s:
+
+| Robots | Total triangles | Acquisition mode | Simulated duration | Wall time | Real-time factor |
+|---|---:|---|---:|---:|---:|
+| 4 | 1,247,142 | Combined BVH | 2 s | 6.799 s | 0.294× |
+| 4 | 1,247,142 | Split / per-step moving BVH | 2 s | 1.850 s | 1.081× |
+| 4 | 1,247,142 | Batched rigid histories | 2 s | 1.362 s | 1.468× |
+| 1 | 578,442 | Batched rigid histories | 2 s | 1.082 s | 1.848× |
+| 8 | 2,138,742 | Batched rigid histories | 2 s | 1.760 s | 1.136× |
+| 8 | 2,138,742 | Batched rigid histories | 10 s | 8.788 s | 1.138× |
+| 8 | 2,138,742 | Batched rigid histories, repeat | 10 s | 8.448 s | 1.184× |
+
+Four-robot modes produced identical valid-return counts (88,421 / 400,000
+scheduled emissions). The ten-second eight-robot runs both returned 408,438
+valid points from two million emissions. The repeat's p95 step was 0.935 ms;
+219 of 10,000 steps exceeded 1 ms. It has modest average throughput margin,
+not hard real-time deadlines. The matched four-robot comparison is approximately
+5× the combined-scene throughput; do not compare these timings directly with
+other engines/hardware or the earlier synthetic-room scene.
+
+The eight-robot verification sampled 5,000 rays over 100 ms, including six
+robot-occluded returns identified against a static-field-only query. All hit/
+miss masks and emission times matched the combined scene; maximum sampled range
+difference was 0.000000954 m. This is numerical agreement on a subset, not
+physical sensor accuracy. Raw reports are ignored `local-assets/realtime/arena-*.json`.
+Only triangle grouping was changed for the benchmark; static groups preserve
+manifest placements and robot internals remain in neutral pose. Full robot
+articulation, wheel/contact physics, moving field mechanisms, rendering and
+ROS/network publishing remain outside these measurements.
+
+Optimization coverage across the simulator adapters currently differs:
+
+| Adapter | Work completed | Remaining performance work |
+|---|---|---|
+| Isaac | Deferred readback, GPU pose interpolation, static/dynamic partitions and rigid history tracing; tested with arena + moving CAD roots | Articulated source-part scaling, full robot dynamics, rendering/publication budgets |
+| MuJoCo | Native multi-ray queries, reusable scratch buffers, consecutive lane-group fast path (~5.2% lower runtime in alternating room tests) | Equivalent full-arena measurement and further architecture profiling |
+| Gazebo | Native step-aware rays, shared four-lane optical phases, reusable output capacity and warmed sensor-disabled/CPU phase profiling | Detailed arena scaling and native engine ray-query acceleration |
+
+For NVIDIA’s built-in RTX LiDAR, see the [native RTX comparison](../rtx-reference.md).
+It tests an explicitly repeating custom profile with Motion BVH enabled and disabled.
+
+## Bulk caller-owned pose history
+
+For static optical scenes, `StaticSceneBatch.scan_history(first_index, counts,
+poses, epoch_ns=0, stride=1)` accepts one owned NumPy history. `counts` contains
+1–100 positive segment sizes (at most 200,000 total rays); `poses` is
+`(len(counts)+1, 7)`, with metre XYZ followed by unit XYZW quaternions.
+Each consecutive pair bounds a segment; its final emission precedes the end
+boundary by one emission interval. Call `flush()` explicitly before another
+history. Inputs are copied, outputs are owned, and geometry changes fail closed.
+
+```python
+import numpy as np
+from mid360.isaac import Mid360Sensor, StaticSceneBatch
+
+batch = StaticSceneBatch(Mid360Sensor(stage))
+poses = np.array([[0, 0, .8, 0, 0, 0, 1],
+                  [.001, 0, .8, 0, 0, 0, 1]], dtype=float)
+batch.scan_history(0, np.array([200]), poses)
+frame = batch.flush()
+```
+
+This avoids per-step Python transform construction while preserving GPU pose
+interpolation. It does not supply moving-obstacle history. Keep the existing
+step-wise or explicit hybrid partition APIs for changing optical geometry.
+[Runtime/accuracy measurements](../performance-tradeoffs.md) distinguish the
+ordinary USD-driven extension from an explicitly headless caller-pose setup.
+Disabling USD writeback is a harness option, not an extension default.

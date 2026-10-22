@@ -91,6 +91,65 @@ class MujocoTests(unittest.TestCase):
         filtered = MujocoSensor(model, data, "lidar", geom_groups=[1, 1, 0, 1, 1, 1])
         self.assertTrue(filtered.scan(0, 1000).valid.any())
 
+    def test_rolling_matches_individual_native_rays_and_owns_results(self):
+        model, data, sensor = self.setup_sensor()
+        p0 = np.array([0.0, 0.0, 0.8])
+        p1 = np.array([0.4, 0.2, 1.0])
+        q0 = np.array([0.0, 0.0, 0.0, 1.0])
+        q1 = np.array([0.0, 0.0, np.sin(np.pi / 4), np.cos(np.pi / 4)])
+        frame = sensor.scan_rolling(
+            1000,
+            201,
+            (p0, q0),
+            (p1, q1),
+            stride=3,
+            pose_fraction=(0.2, 0.8),
+            origin_tolerance_m=1e-6,
+        )
+        expected = []
+        geom = np.empty(1, dtype=np.int32)
+        for t, local in zip(np.linspace(0.2, 0.8, 201), frame.directions):
+            angle = t * np.pi / 2
+            rotation = np.array(
+                [
+                    [np.cos(angle), -np.sin(angle), 0],
+                    [np.sin(angle), np.cos(angle), 0],
+                    [0, 0, 1.0],
+                ]
+            )
+            distance = mujoco.mj_ray(
+                model, data, p0 + (p1 - p0) * t, rotation @ local, None, 1, -1, geom
+            )
+            expected.append(distance if 0.1 <= distance <= 70 else -1)
+        np.testing.assert_allclose(frame.ranges_m, expected, atol=1e-11)
+        self.assertTrue(frame.valid.any())
+        saved = frame.ranges_m.copy()
+        sensor.scan(0, 1000)
+        np.testing.assert_array_equal(frame.ranges_m, saved)
+        np.testing.assert_array_equal(frame.timestamps_ns, frame.indices * 5000)
+        self.assertEqual(data.time, 0.0)
+
+    def test_rolling_origin_tolerance_and_invalid_poses(self):
+        model, data, sensor = self.setup_sensor()
+        p0 = np.array([0.0, 0.0, 0.8])
+        p1 = np.array([0.01, 0.0, 0.8])
+        q = [0.0, 0.0, 0.0, 1.0]
+        frame = sensor.scan_rolling(
+            1000, 1001, (p0, q), (p1, q), origin_tolerance_m=0.002
+        )
+        t = np.linspace(0, 1, 1001)
+        keep = frame.valid
+        # The wall plane converts range error into an X-origin displacement.
+        error = frame.ranges_m[keep] * frame.directions[keep, 0] - (
+            4.9 - 0.01 * t[keep]
+        )
+        self.assertLessEqual(float(np.max(abs(error))), 0.002 + 1e-12)
+        for kwargs in ({"origin_tolerance_m": 0.0}, {"pose_fraction": (0.9, 0.1)}):
+            with self.assertRaises(ValueError):
+                sensor.scan_rolling(0, 200, (p0, q), (p1, q), **kwargs)
+        with self.assertRaises(ValueError):
+            sensor.scan_rolling(0, 200, (p0, [0, 0, 0, 0]), (p1, q))
+
     def test_validation(self):
         model, data, sensor = self.setup_sensor()
         for args in [(0, 0), (-1, 100), (2**64, 100)]:
