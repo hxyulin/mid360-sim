@@ -1092,12 +1092,15 @@ class SceneTransformHistory:
         self._notice = Tf.Notice.Register(Usd.Notice.ObjectsChanged, changed, stage)
         self._validate()
 
-    def _validate(self):
-        if self._invalid or any(not prim.IsValid() for prim in self._prims):
+    def _validate(self, *, check_prims=True):
+        if self._invalid or (
+            check_prims and any(not prim.IsValid() for prim in self._prims)
+        ):
             raise ValueError("moving source changed; rebuild sensor and history")
 
     def _capture_into(self, destination):
-        self._validate()
+        # Both callers validate prims before entering; a capture checks each
+        # source matrix below before any inverse can become a snapshot.
         cache = UsdGeom.XformCache()
         for index, prim in enumerate(self._prims):
             matrix = cache.GetLocalToWorldTransform(prim)
@@ -1241,12 +1244,16 @@ class RigidHybridSensor(HybridSensor):
             if scene_snapshot is None:
                 if self._capture_mode == "shared":
                     raise ValueError("cannot mix shared and self-captured histories")
+                self._scene_history._validate()
                 self._scene_history._capture_into(destination)
                 self._capture_mode = "self"
             else:
-                self._scene_history._validate()
+                # Capture validated prims, and flush checks them again. Between
+                # those boundaries retain notice-based structural invalidation
+                # without rechecking every prim for every consuming sensor.
+                self._scene_history._validate(check_prims=False)
                 history = scene_snapshot.history
-                history._validate()
+                history._validate(check_prims=False)
                 if (
                     history.stage is not self.dynamic.stage
                     or history.paths != tuple(self.dynamic.paths)
