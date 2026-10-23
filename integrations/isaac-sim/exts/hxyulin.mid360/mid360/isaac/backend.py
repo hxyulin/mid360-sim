@@ -1034,6 +1034,60 @@ class SceneTransformSnapshot:
     inverses: np.ndarray
 
 
+class _SceneGeometryGuard:
+    """Share structural notices, never captured transforms, for one partition."""
+
+    _instances = weakref.WeakValueDictionary()
+
+    @classmethod
+    def for_partition(cls, stage, paths):
+        key = (stage, paths)
+        guard = cls._instances.get(key)
+        if guard is None or guard.invalid:
+            guard = cls(stage, paths)
+            cls._instances[key] = guard
+        return guard
+
+    def __init__(self, stage, paths):
+        self.stage = stage
+        self.prims = tuple(stage.GetPrimAtPath(path) for path in paths)
+        self.invalid = False
+        ancestors = {Sdf.Path.absoluteRootPath}
+        for path in paths:
+            path = Sdf.Path(path)
+            while path.pathElementCount:
+                ancestors.add(path)
+                path = path.GetParentPath()
+        owner_ref = weakref.ref(self)
+
+        def changed(notice, sender):
+            owner = owner_ref()
+            if owner is None:
+                return
+            # Resync can replace a prim at the same path, making path-only
+            # validity checks insufficient. Ordinary pose notices are not a cache.
+            for path in notice.GetResyncedPaths():
+                if path.GetPrimPath() in ancestors:
+                    owner.invalid = True
+            for path in notice.GetChangedInfoOnlyPaths():
+                if (
+                    path.name
+                    in (
+                        "points",
+                        "faceVertexCounts",
+                        "faceVertexIndices",
+                        "holeIndices",
+                        "subdivisionScheme",
+                        "size",
+                    )
+                    and path.GetPrimPath() in ancestors
+                ):
+                    owner.invalid = True
+
+        self._changed_callback = changed
+        self._notice = Tf.Notice.Register(Usd.Notice.ObjectsChanged, changed, stage)
+
+
 class SceneTransformHistory:
     """Caller-owned, bounded rigid-scene capture for an identical mesh partition.
 
@@ -1051,49 +1105,17 @@ class SceneTransformHistory:
         self.stage, self.paths, self.generation = stage, tuple(paths), generation
         if not 1 <= len(self.paths) <= 128 or len(set(self.paths)) != len(self.paths):
             raise ValueError("need 1..128 distinct ordered moving source paths")
-        self._prims = tuple(stage.GetPrimAtPath(path) for path in self.paths)
-        self._invalid = False
+        # The weak registry shares only invalidation state. Histories retain
+        # independent captures and keep their guard alive for pending snapshots.
+        self._geometry = _SceneGeometryGuard.for_partition(stage, self.paths)
+        self._prims = self._geometry.prims
         self._storage = None
         self._snapshots = weakref.WeakValueDictionary()
         self._indices = {}
-        ancestors = {Sdf.Path.absoluteRootPath}
-        for path in self.paths:
-            path = Sdf.Path(path)
-            while path.pathElementCount:
-                ancestors.add(path)
-                path = path.GetParentPath()
-        owner_ref = weakref.ref(self)
-
-        def changed(notice, sender):
-            owner = owner_ref()
-            if owner is None:
-                return
-            # Resync can replace a prim at the same path, making path-only
-            # validity checks insufficient. Ordinary pose notices are not a cache.
-            for path in notice.GetResyncedPaths():
-                if path.GetPrimPath() in ancestors:
-                    owner._invalid = True
-            for path in notice.GetChangedInfoOnlyPaths():
-                if (
-                    path.name
-                    in (
-                        "points",
-                        "faceVertexCounts",
-                        "faceVertexIndices",
-                        "holeIndices",
-                        "subdivisionScheme",
-                        "size",
-                    )
-                    and path.GetPrimPath() in ancestors
-                ):
-                    owner._invalid = True
-
-        self._changed_callback = changed
-        self._notice = Tf.Notice.Register(Usd.Notice.ObjectsChanged, changed, stage)
         self._validate()
 
     def _validate(self, *, check_prims=True):
-        if self._invalid or (
+        if self._geometry.invalid or (
             check_prims and any(not prim.IsValid() for prim in self._prims)
         ):
             raise ValueError("moving source changed; rebuild sensor and history")

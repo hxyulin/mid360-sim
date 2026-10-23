@@ -240,6 +240,7 @@ try:
         rebuilt = make_hybrid()
         rebuilt.scan(0, 200, pose)
         assert rebuilt.flush() is not None
+        rejected(lambda: old_history.capture(0), "rebuild revived stale history")
         bounded = SceneTransformHistory(stage, rebuilt.dynamic.paths, 20)
         for index in range(100):
             bounded.capture(index)

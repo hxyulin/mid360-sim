@@ -8,7 +8,9 @@
   transform histories, preserving independent sensor motion and flush schedules.
   Copy inverse matrices directly into retained buffers and avoid repeated
   primitive-validity checks during shared consumption, retaining full capture
-  and flush validation plus structural-invalidation checks.
+  and flush validation plus structural-invalidation checks. Share weakly owned
+  structural-change subscriptions across identical stage/mesh partitions; keep
+  capture storage and generations independent.
 
 - Add opt-in exact per-emission origins to MuJoCo rolling scans through public
   `mj_ray` calls. Grouped queries remain the default; exact mode can change edge

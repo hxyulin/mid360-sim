@@ -264,20 +264,22 @@ histories' structural-invalidation checks without repeating every prim check.
 Source-transform finiteness, affine components and determinants remain validated
 before inversion.
 
-Five alternating trials against the inverse-buffer optimization (`9c9c64c`)
-measured 1.395 → 1.392 s for one sensor (effectively flat) and 1.826 → 1.809 s
-for two sensors (0.95% faster). A separate paired comparison against the original
-`5dff2fb` baseline measured 1.772 → 1.743 s for two sensors sharing captures
-(1.65% faster). The earlier two-sensor regression was not observed in this run.
+Histories for the same stage and ordered partition now share one weakly owned
+structural-change observer. Capture generations and matrices remain independent;
+rebuilding creates a fresh observer while old histories remain invalid. Native
+checks cover observer release, separate stages and retained snapshots.
 
-These RTX 5090 runs used eight objects and 2,000 distinct 1 ms captures. Ranges
-matched exactly. Native geometry and invalid-source checks passed, including
-shared scans after removal, hole edits and subdivision edits. Trials were not
-CPU-pinned, have no confidence intervals and include outliers; full samples are
-retained. Absolute times shifted between sessions. The replay includes USD edits,
-capture, tracing and owned range readback, excluding physics, rendering, XYZ
-packaging and transport. Profiling points to duplicate change subscriptions as
-another candidate; GPU upload sharing and AABB gating remain unimplemented.
+Five alternating trials against `0e73341` measured 1.391 → 1.390 s for one sensor
+(effectively flat) and 1.771 → 1.713 s for two sensors (3.28% faster). Ranges
+matched exactly. The diagnostic profile recorded one structural callback per USD
+change for the shared partition, reducing duplicate history subscriptions.
+
+These RTX 5090 runs used eight objects and 2,000 distinct 1 ms captures. Native
+geometry, invalid-source and mesh-edit checks passed, including rebuilding without
+reviving stale histories. Trials were not CPU-pinned and have no confidence
+intervals; full samples are retained. The replay includes USD edits, capture,
+tracing and owned range readback, excluding physics, rendering, XYZ packaging and
+transport. GPU upload sharing and AABB gating remain unimplemented.
 [Paired trials, native checks and source provenance](/benchmarks/isaac-shared-history-rtx5090.json)
 record the scope. See [shared capture usage](guide/acquisition.md#explicit-shared-isaac-rigid-captures).
 

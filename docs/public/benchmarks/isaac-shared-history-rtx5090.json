@@ -910,5 +910,204 @@
     },
     "limitations": "Five alternating pairs per comparison after warmup, eight objects, two-second pose replay, exclusive performance lock. Shared host, no CPU pinning or confidence intervals. One candidate outlier in the 9c9c64c comparison and one baseline outlier in the 5dff2fb comparison; full samples retained. Timings exclude physics, rendering, XYZ packaging and transport. GPU construction profiler timings are CPU-side diagnostics, not isolated GPU duration measurements. Do not compare absolute times across sessions.",
     "next_candidate": "Consolidate duplicate structural-change subscriptions while preserving per-sensor geometry invalidation; not implemented or benchmarked."
+  },
+  "shared_structural_observer": {
+    "baseline_commit": "0e73341",
+    "change": "Share one weakly owned structural-change observer for each stage and ordered source partition. Generation identities, captured matrices, storage and consumer schedules remain independent. Invalid observers are replaced for rebuilt geometry without reviving histories retaining the old observer.",
+    "source_sha256": {
+      "integrations/isaac-sim/exts/hxyulin.mid360/mid360/isaac/backend.py": "9154c6ad6efceaa0d51e2c2a3bf2f6d9b3cc8cc50e8de2deac49b947922cc48e",
+      "integrations/isaac-sim/tests/hybrid.py": "79b792e17427705714ff499976b7a1dd51de3ec34663499f05f70261b28bff00",
+      "supplemental_probe.py": "7213fb74a326a44a9c65bee756c96ef1777a798175b3dc91f662c45d876b4715"
+    },
+    "native_correctness": {
+      "rigid_trace": true,
+      "points": 4849,
+      "moving_hits": 897,
+      "moving_source_meshes": 2,
+      "max_range_difference_m": 5.245208740234375e-06,
+      "checks": "union equivalence across multiple nested translating/rotating/reflected/scaled meshes and turning sensor; stride/fractions/time; near static and dynamic occlusion; owned outputs; static-change failure; rigid shared lifetime, identity, singular/removal/recreation and bounds; actual physics writeback shared by two sensors"
+    },
+    "supplemental_checks": "Passed shared observer identity with independent per-generation matrix captures, separate-stage isolation, size-edit invalidation of both old histories, rebuild without revival, weak observer release after the final retained snapshot; also existing 64 invalid-source cases, removal/hole/subdivision rejection after capture, affine, snapshot identity and ownership checks.",
+    "measurements": {
+      "1-sensor-self": {
+        "mode": "rigid",
+        "backend_sha256": {
+          "baseline": "2feb9196f4a65b497d91e4e9c09bb718a0edd342c666ebed824cdb80a2bd49ff",
+          "candidate": "9154c6ad6efceaa0d51e2c2a3bf2f6d9b3cc8cc50e8de2deac49b947922cc48e"
+        },
+        "source_metadata": {
+          "source": "JEPLO EIL_Mask2 independent 100 Hz Qualisys LiDAR-frame poses",
+          "source_sha256": "3a7f5ae4db916c1003ceefbc8b2a91e568c56936708f6662095753991211155a",
+          "start_relative_s": 1.7500000000000004,
+          "duration_s": 2.0,
+          "rays": 400000,
+          "step_ns": 1000000,
+          "translation_shift_m": [
+            -2.338317357916168,
+            -0.26048769947648776,
+            0.3428000131026423
+          ],
+          "gaps_over_20ms": 0,
+          "max_gt_gap_s": 0.012101410999999729,
+          "scope": "real measured motion, synthetic exact enclosure, nominal optics; not real scene/range validation"
+        },
+        "warmup_replays_per_mode": 1,
+        "objects": 8,
+        "sensors": 1,
+        "shared_candidate_captures": false,
+        "rays": 400000,
+        "baseline": "/tmp/mid360-shared-guard-20261023/baseline/backend.py",
+        "median_s": {
+          "baseline": 1.391315229004249,
+          "candidate": 1.3895754860132001
+        },
+        "trials_s": {
+          "baseline": [
+            1.3825442900124472,
+            1.3877375750162173,
+            1.391350974998204,
+            1.393779331992846,
+            1.391315229004249
+          ],
+          "candidate": [
+            1.3905912209884264,
+            1.3895754860132001,
+            1.3881195550202392,
+            1.3893523269798607,
+            1.3915029279887676
+          ]
+        },
+        "max_range_difference_m": 0.0,
+        "valid": {
+          "baseline": 400000,
+          "candidate": 400000
+        },
+        "scope": "same-process alternating native acquisition, owned range readback; rigid adds USD edits/captures; no physics, rendering, XYZ packaging or transport",
+        "candidate_change_percent": -0.1250430495390975
+      },
+      "2-sensor-shared": {
+        "mode": "rigid",
+        "backend_sha256": {
+          "baseline": "2feb9196f4a65b497d91e4e9c09bb718a0edd342c666ebed824cdb80a2bd49ff",
+          "candidate": "9154c6ad6efceaa0d51e2c2a3bf2f6d9b3cc8cc50e8de2deac49b947922cc48e"
+        },
+        "source_metadata": {
+          "source": "JEPLO EIL_Mask2 independent 100 Hz Qualisys LiDAR-frame poses",
+          "source_sha256": "3a7f5ae4db916c1003ceefbc8b2a91e568c56936708f6662095753991211155a",
+          "start_relative_s": 1.7500000000000004,
+          "duration_s": 2.0,
+          "rays": 400000,
+          "step_ns": 1000000,
+          "translation_shift_m": [
+            -2.338317357916168,
+            -0.26048769947648776,
+            0.3428000131026423
+          ],
+          "gaps_over_20ms": 0,
+          "max_gt_gap_s": 0.012101410999999729,
+          "scope": "real measured motion, synthetic exact enclosure, nominal optics; not real scene/range validation"
+        },
+        "warmup_replays_per_mode": 1,
+        "objects": 8,
+        "sensors": 2,
+        "shared_candidate_captures": true,
+        "rays": 800000,
+        "baseline": "/tmp/mid360-shared-guard-20261023/baseline/backend.py",
+        "median_s": {
+          "baseline": 1.7705584760115016,
+          "candidate": 1.7125057090015616
+        },
+        "trials_s": {
+          "baseline": [
+            1.7743366800132208,
+            1.7660625429998618,
+            1.763456184999086,
+            1.7725047300045844,
+            1.7705584760115016
+          ],
+          "candidate": [
+            1.7125028840091545,
+            1.7149400080088526,
+            1.8849914919992443,
+            1.7123292330070399,
+            1.7125057090015616
+          ]
+        },
+        "max_range_difference_m": 0.0,
+        "valid": {
+          "baseline": 800000,
+          "candidate": 800000
+        },
+        "scope": "same-process alternating native acquisition, owned range readback; rigid adds USD edits/captures; no physics, rendering, XYZ packaging or transport",
+        "candidate_change_percent": -3.2787828132462615
+      }
+    },
+    "diagnostic_profile": {
+      "method": "cProfile on warmed two-sensor replay. Both module versions coexist as in the paired harness; rows identify their source module. Baseline uses self-capture and candidate uses shared captures. Diagnostic times are instrumented and are not acquisition benchmark results.",
+      "rows": {
+        "baseline": [
+          {
+            "file": "/tmp/mid360-shared-guard-profile-20261023/baseline/backend.py",
+            "line": 1067,
+            "function": "changed",
+            "calls": 64000,
+            "self_s": 0.056929213000000006,
+            "total_s": 0.056929213000000006
+          },
+          {
+            "file": "/tmp/mid360-shared-guard-profile-20261023/integrations/isaac-sim/exts/hxyulin.mid360/mid360/isaac/backend.py",
+            "line": 1063,
+            "function": "changed",
+            "calls": 32000,
+            "self_s": 0.031302869000000004,
+            "total_s": 0.031302869000000004
+          },
+          {
+            "file": "/tmp/mid360-shared-guard-profile-20261023/baseline/backend.py",
+            "line": 1095,
+            "function": "_validate",
+            "calls": 4040,
+            "self_s": 0.00177347,
+            "total_s": 0.028920932000000003
+          }
+        ],
+        "candidate": [
+          {
+            "file": "/tmp/mid360-shared-guard-profile-20261023/integrations/isaac-sim/exts/hxyulin.mid360/mid360/isaac/backend.py",
+            "line": 1149,
+            "function": "capture",
+            "calls": 2000,
+            "self_s": 0.010094889000000001,
+            "total_s": 0.146995757
+          },
+          {
+            "file": "/tmp/mid360-shared-guard-profile-20261023/baseline/backend.py",
+            "line": 1067,
+            "function": "changed",
+            "calls": 64000,
+            "self_s": 0.056944443000000004,
+            "total_s": 0.056944443000000004
+          },
+          {
+            "file": "/tmp/mid360-shared-guard-profile-20261023/integrations/isaac-sim/exts/hxyulin.mid360/mid360/isaac/backend.py",
+            "line": 1063,
+            "function": "changed",
+            "calls": 32000,
+            "self_s": 0.031600525000000004,
+            "total_s": 0.031600525000000004
+          },
+          {
+            "file": "/tmp/mid360-shared-guard-profile-20261023/integrations/isaac-sim/exts/hxyulin.mid360/mid360/isaac/backend.py",
+            "line": 1117,
+            "function": "_validate",
+            "calls": 10100,
+            "self_s": 0.001841257,
+            "total_s": 0.016861177
+          }
+        ]
+      },
+      "finding": "Candidate structural observer handled 32000 callbacks, one per authored USD change, despite two sensor histories plus the shared capture history. The previous pre-consolidation profile recorded 96304 candidate structural callbacks for this fixture; those counts are from separate profiling sessions, not a timing comparison."
+    },
+    "limitations": "Five alternating pairs after warmup, eight objects, same two-second pose fixture and exclusive performance lock. Shared host, no CPU pinning or confidence intervals. Timings include USD edits/captures, tracing and owned range readback; exclude physics, rendering, XYZ packaging and transport. No whole-simulator or general-scene speedup claim."
   }
 }
