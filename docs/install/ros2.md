@@ -29,6 +29,13 @@ Subscribe to `/livox/lidar` with best-effort-compatible QoS and set
 `timebase` are the first emission time, even if it missed. `offset_time` stays
 relative to that time; valid points are sensor-local at their own acquisition.
 
+Rust callers can select point-cloud delivery with
+`LivoxPublisher::new_with_qos(node, topic, qos)` or
+`TypedLivoxPublisher::new_with_qos(node, topic, qos)`, passing an
+`rclrs::QoSProfile`. The ordinary constructors retain best-effort volatile
+depth 5, and `/clock` keeps its existing QoS. Reliable publication can block in
+the middleware; keep it outside physics stepping and match the consumer's QoS.
+
 The demo defaults to 200,000 emissions/s, 10 Hz publication, 2 cm generic range
 noise and 1% independent dropout. These are simulation choices, not calibrated
 hardware parameters. `line = index % 4`, `tag = 0x10` and reflectivity 100 are

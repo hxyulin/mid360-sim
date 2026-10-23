@@ -9,6 +9,7 @@ geometry; schedule coherent short captures from the physics loop.
 
 import mujoco
 import numpy as np
+
 from .pattern import ScanFrame, directions, validate_window
 
 
@@ -103,6 +104,7 @@ class MujocoSensor:
         stride=1,
         origin_tolerance_m=0.0005,
         pose_fraction=(0.0, 1.0),
+        query_mode="grouped",
     ):
         """Interpolate caller-supplied sensor poses without advancing physics.
 
@@ -113,9 +115,22 @@ class MujocoSensor:
         groups, using their midpoint origins. origin_tolerance_m bounds that
         origin displacement, NOT range error at grazing surfaces. Scene/body
         geometry is the current mjData throughout; callers own its history.
+        query_mode="exact" instead uses public mj_ray once per emission at
+        its interpolated origin, with Python call overhead. It changes edge
+        fidelity, not just speed. "grouped" remains the default; tolerance is
+        unused in exact mode. Both modes accept 1..200000 emissions per call.
         Defaults remain unchanged for ordinary scan().
         """
         validate_window(first_index, count, stride, epoch_ns)
+        if query_mode not in ("grouped", "exact"):
+            raise ValueError("query_mode must be 'grouped' or 'exact'")
+        if query_mode == "exact":
+            if not isinstance(self.model, mujoco.MjModel) or not isinstance(
+                self.data, mujoco.MjData
+            ):
+                raise TypeError("exact queries require MuJoCo MjModel/MjData")
+            if self.data.model is not self.model:
+                raise ValueError("exact queries require data belonging to model")
         if not np.isfinite(origin_tolerance_m) or origin_tolerance_m <= 0:
             raise ValueError("origin_tolerance_m must be positive and finite")
         fraction = np.asarray(pose_fraction, dtype=float)
@@ -176,24 +191,38 @@ class MujocoSensor:
             self.capacity = count
             self._ranges = np.empty(count, dtype=np.float64)
             self._ids = np.empty(count, dtype=np.int32)
-        for group in range(groups):
-            a, b = group * count // groups, (group + 1) * count // groups
-            origin = np.ascontiguousarray(p0 + (p1 - p0) * ((t[a] + t[b - 1]) * 0.5))
-            rays = np.ascontiguousarray(world[a:b])
-            mujoco.mj_multiRay(
-                self.model,
-                self.data,
-                origin,
-                rays.ravel(),
-                self.geom_groups,
-                1,
-                self.body_exclude,
-                self._ids[a:b],
-                self._ranges[a:b],
-                None,
-                b - a,
-                self.max_range_m,
-            )
+        if query_mode == "exact":
+            origins = np.ascontiguousarray(p0 + (p1 - p0) * t[:, None])
+            for i in range(count):
+                self._ranges[i] = mujoco.mj_ray(
+                    self.model,
+                    self.data,
+                    origins[i],
+                    world[i],
+                    self.geom_groups,
+                    1,
+                    self.body_exclude,
+                    self._ids[i : i + 1],
+                )
+        else:
+            for group in range(groups):
+                a, b = group * count // groups, (group + 1) * count // groups
+                origin = np.ascontiguousarray(p0 + (p1 - p0) * ((t[a] + t[b - 1]) * 0.5))
+                rays = np.ascontiguousarray(world[a:b])
+                mujoco.mj_multiRay(
+                    self.model,
+                    self.data,
+                    origin,
+                    rays.ravel(),
+                    self.geom_groups,
+                    1,
+                    self.body_exclude,
+                    self._ids[a:b],
+                    self._ranges[a:b],
+                    None,
+                    b - a,
+                    self.max_range_m,
+                )
         ranges, ids = self._ranges[:count], self._ids[:count]
         invalid = (
             (ranges < self.min_range_m)

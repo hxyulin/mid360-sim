@@ -1020,6 +1020,136 @@ class HybridSensor:
             raise
 
 
+@dataclass(frozen=True)
+class SceneTransformSnapshot:
+    """Owned read-only inverse matrices for one caller-identified scene capture.
+
+    Matrices map world metres into fixed mesh-local coordinates. The history
+    retains their stage, ordered partition and generation identity. Retaining a
+    snapshot retains its storage independently of any sensor's flush schedule.
+    """
+
+    history: "SceneTransformHistory"
+    capture_id: object
+    inverses: np.ndarray
+
+
+class SceneTransformHistory:
+    """Caller-owned, bounded rigid-scene capture for an identical mesh partition.
+
+    Create a history with an explicit generation identity per <=100 captures.
+    Call capture() after actual physics-to-USD writeback, with a unique hashable
+    capture identity per scene snapshot (not a wall-clock time or USD notice).
+    Repeating that identity returns the same immutable capture, even after later
+    pose edits. Stage and ordered paths must match every consuming sensor.
+    No object interpolation or synchronization is performed here. Rebuild this
+    history and the sensors after removal, replacement, resync or mesh edits.
+    """
+
+    def __init__(self, stage, paths, generation):
+        hash(generation)
+        self.stage, self.paths, self.generation = stage, tuple(paths), generation
+        if not 1 <= len(self.paths) <= 128 or len(set(self.paths)) != len(self.paths):
+            raise ValueError("need 1..128 distinct ordered moving source paths")
+        self._prims = tuple(stage.GetPrimAtPath(path) for path in self.paths)
+        self._invalid = False
+        self._storage = None
+        self._snapshots = weakref.WeakValueDictionary()
+        self._indices = {}
+        ancestors = {Sdf.Path.absoluteRootPath}
+        for path in self.paths:
+            path = Sdf.Path(path)
+            while path.pathElementCount:
+                ancestors.add(path)
+                path = path.GetParentPath()
+        owner_ref = weakref.ref(self)
+
+        def changed(notice, sender):
+            owner = owner_ref()
+            if owner is None:
+                return
+            # Resync can replace a prim at the same path, making path-only
+            # validity checks insufficient. Ordinary pose notices are not a cache.
+            for path in notice.GetResyncedPaths():
+                if path.GetPrimPath() in ancestors:
+                    owner._invalid = True
+            for path in notice.GetChangedInfoOnlyPaths():
+                if (
+                    path.name
+                    in (
+                        "points",
+                        "faceVertexCounts",
+                        "faceVertexIndices",
+                        "holeIndices",
+                        "subdivisionScheme",
+                        "size",
+                    )
+                    and path.GetPrimPath() in ancestors
+                ):
+                    owner._invalid = True
+
+        self._changed_callback = changed
+        self._notice = Tf.Notice.Register(Usd.Notice.ObjectsChanged, changed, stage)
+        self._validate()
+
+    def _validate(self):
+        if self._invalid or any(not prim.IsValid() for prim in self._prims):
+            raise ValueError("moving source changed; rebuild sensor and history")
+
+    def _capture_into(self, destination):
+        self._validate()
+        cache = UsdGeom.XformCache()
+        for index, prim in enumerate(self._prims):
+            matrix = cache.GetLocalToWorldTransform(prim)
+            source = np.asarray(matrix, dtype=np.float64)
+            if (
+                not np.isfinite(source).all()
+                or source[0, 3] != 0
+                or source[1, 3] != 0
+                or source[2, 3] != 0
+                or source[3, 3] != 1
+            ):
+                raise ValueError("nonfinite or non-affine moving source transform")
+            determinant = matrix.GetDeterminant()
+            if not math.isfinite(determinant) or abs(determinant) < 1e-12:
+                raise ValueError("singular moving source transform")
+            # Retain Gf's double-precision affine inverse, including nested
+            # shear/reflection; pose decomposition is not equivalent.
+            inverse = np.array(matrix.GetInverse().GetTranspose(), dtype=np.float32)
+            if not np.isfinite(inverse).all():
+                raise ValueError("nonfinite moving source inverse")
+            destination[index] = inverse
+
+    def capture(self, capture_id):
+        """Capture once per explicit identity; matrices use world metres.
+
+        At most 100 distinct captures are retained. Start a new generation/history
+        for another batch; old snapshots remain valid while consumers retain them.
+        Callers must serialize scene writes and capture on their acquisition thread.
+        """
+        self._validate()
+        if capture_id in self._snapshots:
+            return self._snapshots[capture_id]
+        if capture_id in self._indices:
+            index = self._indices[capture_id]
+        else:
+            index = len(self._indices)
+            if index >= 100:
+                raise ValueError("scene transform history capacity exceeded")
+            if self._storage is None:
+                self._storage = np.empty((100, len(self.paths), 4, 4), dtype=np.float32)
+            self._capture_into(self._storage[index])
+            self._indices[capture_id] = index
+        # A read-only buffer prevents consumers enabling ndarray writes. Rows
+        # are never overwritten, and each snapshot keeps its entire owner alive.
+        inverses = np.frombuffer(
+            memoryview(self._storage[index]).toreadonly(), dtype=np.float32
+        ).reshape(len(self.paths), 4, 4)
+        snapshot = SceneTransformSnapshot(self, capture_id, inverses)
+        self._snapshots[capture_id] = snapshot
+        return snapshot
+
+
 class RigidHybridSensor(HybridSensor):
     """Batch static and moving queries using per-step object-transform histories.
 
@@ -1060,7 +1190,15 @@ class RigidHybridSensor(HybridSensor):
             dtype=wp.uint64,
             device=dynamic_sensor.device,
         )
-        self.history = []
+        self._scene_history = SceneTransformHistory(
+            dynamic_sensor.stage, dynamic_sensor.paths, generation=0
+        )
+        self._inverse_history = np.empty(
+            (100, len(dynamic_sensor.paths), 4, 4), dtype=np.float32
+        )
+        self._history_count = 0
+        self._shared_histories = set()
+        self._capture_mode = None
 
     def scan(
         self,
@@ -1072,12 +1210,17 @@ class RigidHybridSensor(HybridSensor):
         stride=1,
         defer_readback=True,
         pose_fraction=(0.0, 1.0),
+        scene_snapshot=None,
     ):
         """Record sensor endpoints and this step's moving-object inverse matrices.
 
         Geometry is frozen within each segment, exactly as in ordinary scans.
         Invalid/removed/singular geometry fails the whole acquisition; discard
         the instance on error. No GPU work is launched for moving meshes here.
+        Optional scene_snapshot explicitly shares one caller-owned capture from
+        SceneTransformHistory; poses/fractions and flush schedules remain local.
+        Generations may overlap independent flush schedules within the existing
+        100-segment bound. Do not mix sharing and self-capture in one batch.
         """
         if self.failed:
             raise ValueError("discard failed rigid hybrid acquisition")
@@ -1093,20 +1236,30 @@ class RigidHybridSensor(HybridSensor):
                 stride,
                 pose_fraction=pose_fraction,
             )
-            cache = UsdGeom.XformCache()
-            matrices = []
-            for path in self.dynamic.paths:
-                prim = self.dynamic.stage.GetPrimAtPath(path)
-                if not prim.IsValid():
-                    raise ValueError("moving source removed; rebuild sensor")
-                matrix = cache.GetLocalToWorldTransform(prim)
-                if abs(matrix.GetDeterminant()) < 1e-12:
-                    raise ValueError("singular moving source transform")
-                inverse = np.array(matrix.GetInverse().GetTranspose(), dtype=np.float32)
-                if not np.isfinite(inverse).all():
-                    raise ValueError("nonfinite moving source inverse")
-                matrices.append(inverse)
-            self.history.append(matrices)
+            destination = self._inverse_history[self._history_count]
+            if scene_snapshot is None:
+                if self._capture_mode == "shared":
+                    raise ValueError("cannot mix shared and self-captured histories")
+                self._scene_history._capture_into(destination)
+                self._capture_mode = "self"
+            else:
+                self._scene_history._validate()
+                history = scene_snapshot.history
+                history._validate()
+                if (
+                    history.stage is not self.dynamic.stage
+                    or history.paths != tuple(self.dynamic.paths)
+                    or self._capture_mode == "self"
+                    or history._snapshots.get(scene_snapshot.capture_id)
+                    is not scene_snapshot
+                ):
+                    raise ValueError(
+                        "scene snapshot stage/partition/generation mismatch"
+                    )
+                self._shared_histories.add(history)
+                self._capture_mode = "shared"
+                destination[:] = scene_snapshot.inverses
+            self._history_count += 1
         except Exception:
             self.failed = True
             raise
@@ -1120,15 +1273,18 @@ class RigidHybridSensor(HybridSensor):
         """
         if self.failed:
             raise ValueError("discard failed rigid hybrid acquisition")
-        if not self.history:
+        if not self._history_count:
             return None
         try:
+            self._scene_history._validate()
+            for history in self._shared_histories:
+                history._validate()
             segments = list(self.static.segments)
             frame = self.static._drain_device(trace=False)
-            if frame is None or len(segments) != len(self.history):
+            if frame is None or len(segments) != self._history_count:
                 raise ValueError("rigid hybrid histories diverged")
             device = self.dynamic.device
-            matrices = np.array(self.history, dtype=np.float32).reshape(-1, 4, 4)
+            matrices = self._inverse_history[: self._history_count].reshape(-1, 4, 4)
             wp.launch(
                 query_rigid_history,
                 dim=(max(s[0] for s in segments), len(segments)),
@@ -1150,7 +1306,9 @@ class RigidHybridSensor(HybridSensor):
                 device=device,
             )
             result = _host_frame(*frame)
-            self.history.clear()
+            self._history_count = 0
+            self._shared_histories.clear()
+            self._capture_mode = None
             return result
         except Exception:
             self.failed = True

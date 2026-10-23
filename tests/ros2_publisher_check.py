@@ -8,7 +8,7 @@ import time
 
 import rclpy
 from livox_ros_driver2.msg import CustomMsg
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import PointCloud2
 
@@ -30,6 +30,11 @@ def stamp_ns(stamp):
 
 def main():
     typed = sys.argv[2] == "typed"
+    livox_qos = (
+        QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
+        if sys.argv[3] == "reliable"
+        else qos_profile_sensor_data
+    )
     rclpy.init()
     node = rclpy.create_node("publisher_regression_check")
     livox, clouds, clocks = [], [], []
@@ -43,7 +48,7 @@ def main():
             ty,
             topic,
             receive_cloud if dest is clouds else dest.append,
-            qos_profile_sensor_data,
+            livox_qos if ty is CustomMsg else qos_profile_sensor_data,
         )
         for ty, topic, dest in [
             (CustomMsg, sys.argv[1] + "/livox", livox),

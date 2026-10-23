@@ -105,6 +105,38 @@ partition modes retain moving geometry per step, not continuous within-step
 object motion. Physically moving meshes must not be put in a static batch.
 Changing topology/deforming meshes requires rebuilding the Isaac backend.
 
+### Explicit shared Isaac rigid captures
+
+`RigidHybridSensor.scan()` self-captures by default, using bounded contiguous
+storage. For sensors with the same stage and **ordered** moving mesh paths,
+callers can explicitly share captures after their actual physics-to-USD writeback:
+
+```python
+from mid360.isaac import SceneTransformHistory
+
+history = SceneTransformHistory(stage, sensor_a.dynamic.paths, generation=batch_id)
+# After this step's physics writeback, before either sensor callback:
+snapshot = history.capture(step_id)
+sensor_a.scan(first_a, count_a, pose_a0, pose_a1, scene_snapshot=snapshot)
+sensor_b.scan(first_b, count_b, pose_b0, pose_b1, scene_snapshot=snapshot)
+```
+
+A generation holds at most 100 distinct captures and 128 moving meshes. Create a
+new history for the next generation; retain old snapshots for consumers still
+using that generation. Reusing a capture identity returns its original immutable
+matrices even after later pose edits: identities must describe actual scene
+snapshots, never just the latest pose or USD notice revision. The caller must
+serialize writes/capture and supply coherent static geometry and sensor poses.
+A pending sensor batch may span history generations within its 100-segment bound;
+keep sharing or self-capture consistent throughout that batch. Sensors
+keep their own emission times, pose fractions, SLERP, flush schedules, device
+uploads and owned outputs; sharing does not require a common flush.
+
+Removal, replacement, resync, mesh edits and singular/nonfinite/non-affine
+transforms fail closed; rebuild sensors/history after structural edits. Nested scale, reflection
+and shear retain the existing Gf affine inversion. Capture sharing does not add
+within-step object interpolation or change the extension's production defaults.
+
 ## Acquisition interval is not publication interval
 
 At full rate, 200 rays span 1 ms and 20,000 rays span 100 ms. Acquiring against

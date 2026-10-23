@@ -4,6 +4,19 @@
 
 ## Unreleased
 
+- Add explicit shared Isaac rigid-scene snapshots and bounded contiguous
+  transform histories, preserving independent sensor motion and flush schedules.
+  Final native acquisition comparisons were approximately 2–3% slower; no
+  pipeline speedup is claimed.
+
+- Add opt-in exact per-emission origins to MuJoCo rolling scans through public
+  `mj_ray` calls. Grouped queries remain the default; exact mode can change edge
+  hits and has workload-dependent runtime. Add a complete-acquisition benchmark.
+
+- Allow caller-selected Livox point-cloud QoS for dynamic and typed publishers,
+  retaining the existing best-effort defaults. Add matched-subscriber controls
+  for consumer decoding, queue depth, reliability and sensor publication spacing.
+
 - Add an opt-in `ros2-typed` Livox endpoint with owned RMW-native storage,
   singleton support, packet validation and matching simulation-clock publication.
   Enable it in the demos with `ros2-typed`; keep the dynamic `ros2` path available.

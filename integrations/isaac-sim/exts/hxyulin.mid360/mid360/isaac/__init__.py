@@ -3,10 +3,23 @@
 """MID-360 Isaac Sim adapter. Import after starting SimulationApp/enabling Warp."""
 
 from .backend import (
-    Mid360Sensor,
-    ScanFrame,
-    StaticSceneBatch,
     HybridSensor,
+    Mid360Sensor,
     RigidHybridSensor,
+    ScanFrame,
+    SceneTransformHistory,
+    SceneTransformSnapshot,
+    StaticSceneBatch,
 )
 from .extension import Extension
+
+__all__ = [
+    "Extension",
+    "HybridSensor",
+    "Mid360Sensor",
+    "RigidHybridSensor",
+    "ScanFrame",
+    "SceneTransformHistory",
+    "SceneTransformSnapshot",
+    "StaticSceneBatch",
+]

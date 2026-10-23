@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2026 hxyulin <hxyulin@proton.me>
 //! Native construction experiment; no production publisher selection is changed.
+mod matched;
+
 use anyhow::{Result, bail};
 use mid360_sim::{LivoxPoint, pointcloud};
 use rclrs::{
@@ -164,6 +166,9 @@ fn main() -> Result<()> {
     let context = rclrs::Context::default_from_env()?;
     let executor = context.create_basic_executor();
     let node = executor.create_node("construction_bench")?;
+    if std::env::args().any(|a| a == "--matched") {
+        return matched::run(&node);
+    }
     if std::env::args().any(|a| a == "--production") {
         return production(&node);
     }

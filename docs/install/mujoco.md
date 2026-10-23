@@ -70,6 +70,21 @@ sensor history, not obstacle history. It never advances physics. Returned
 arrays own their data. See the [runtime/accuracy comparison](../performance-tradeoffs.md)
 for measured benefits and costs; the rolling option is not automatically faster.
 
+For exact per-emission translation, explicitly select the public scalar ray path:
+
+```python
+frame = sensor.scan_rolling(0, 200, a, b,
+    pose_fraction=(0, 199 / 200), query_mode="exact")
+```
+
+`query_mode="grouped"` remains the default. `"exact"` uses the same per-emission
+rotations and translations with one public Python `mj_ray` call per emission;
+`origin_tolerance_m` does not control its origins. It can change edge hits relative
+to midpoint grouping and incurs Python call overhead. It is not a bit-preserving
+optimization of grouped results. Both modes support 1–200,000 rays per call,
+existing group/body filters, range limits, owned output and the current geometry
+snapshot. Exact queries require a live `MjModel` and its matching `MjData`.
+
 MuJoCo ray tests use its geoms, not an independent render scene. Include
 suitable optical mesh geoms if collision proxies erase visual detail. The
 six-entry `geom_groups` filter is explicit; `contype`/`conaffinity` do not select

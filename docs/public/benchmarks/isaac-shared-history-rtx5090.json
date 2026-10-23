@@ -1,0 +1,326 @@
+{
+  "worktree": "/Users/hxyulin/.t3/worktrees/mid360-sim/t3-b65c96b7",
+  "base_commit": "5dff2fb23d8356cef18f9ed6421e33d052e41d31",
+  "implementation": "explicit SceneTransformHistory.capture(capture_id) and RigidHybridSensor.scan(scene_snapshot=...), bounded contiguous self-capture by default; unchanged extension mode defaults",
+  "lifetime": "immutable read-only capture rows retained by snapshots; weak registry avoids owner cycles; independent consumers may span generations and flush independently",
+  "native": "Talos existing talos-isaac-sim container, RTX 5090, Warp 1.17.0; temporary /tmp/mid360-shared-b65c96b7 only, no production checkout changes",
+  "timing_lock": "exclusive fcntl.flock /Users/hxyulin/dev/RM/mid360-sim/local-assets/perf-investigation.lock around every complete SSH timing subprocess, including startup/shutdown",
+  "native_correctness": {
+    "rigid_trace": true,
+    "points": 4849,
+    "moving_hits": 897,
+    "moving_source_meshes": 2,
+    "max_range_difference_m": 5.245208740234375e-06,
+    "checks": "union equivalence across multiple nested translating/rotating/reflected/scaled meshes and turning sensor; stride/fractions/time; near static and dynamic occlusion; owned outputs; static-change failure; rigid shared lifetime, identity, singular/removal/recreation and bounds; actual physics writeback shared by two sensors"
+  },
+  "measurements": {
+    "one-sensor-release": {
+      "mode": "rigid",
+      "backend_sha256": {
+        "baseline": "9901a2f07bd998ff153dc8eca342daed6656b0ee29196c00b537990ab140162b",
+        "candidate": "be48189aa2bf926cf2b3575108c4aad116a4c4fbf1bf22583f8cbf9854080fee"
+      },
+      "source_metadata": {
+        "source": "JEPLO EIL_Mask2 independent 100 Hz Qualisys LiDAR-frame poses",
+        "source_sha256": "3a7f5ae4db916c1003ceefbc8b2a91e568c56936708f6662095753991211155a",
+        "start_relative_s": 1.7500000000000004,
+        "duration_s": 2.0,
+        "rays": 400000,
+        "step_ns": 1000000,
+        "translation_shift_m": [
+          -2.338317357916168,
+          -0.26048769947648776,
+          0.3428000131026423
+        ],
+        "gaps_over_20ms": 0,
+        "max_gt_gap_s": 0.012101410999999729,
+        "scope": "real measured motion, synthetic exact enclosure, nominal optics; not real scene/range validation"
+      },
+      "warmup_replays_per_mode": 1,
+      "objects": 8,
+      "sensors": 1,
+      "shared_candidate_captures": false,
+      "rays": 400000,
+      "baseline": "/tmp/mid360-shared-b65c96b7/baseline/backend.py",
+      "median_s": {
+        "baseline": 1.3577541770064272,
+        "candidate": 1.3475739429995883
+      },
+      "trials_s": {
+        "baseline": [
+          1.3560010100190993,
+          1.3577541770064272,
+          1.3609619800117798
+        ],
+        "candidate": [
+          1.340789907000726,
+          1.3475739429995883,
+          1.3496772770013195
+        ]
+      },
+      "max_range_difference_m": 0.0,
+      "valid": {
+        "baseline": 400000,
+        "candidate": 400000
+      },
+      "scope": "same-process alternating native acquisition, owned range readback; rigid adds USD edits/captures; no physics, rendering, XYZ packaging or transport",
+      "candidate_change_percent": -0.7497847680560388
+    },
+    "two-sensors-release": {
+      "mode": "rigid",
+      "backend_sha256": {
+        "baseline": "9901a2f07bd998ff153dc8eca342daed6656b0ee29196c00b537990ab140162b",
+        "candidate": "be48189aa2bf926cf2b3575108c4aad116a4c4fbf1bf22583f8cbf9854080fee"
+      },
+      "source_metadata": {
+        "source": "JEPLO EIL_Mask2 independent 100 Hz Qualisys LiDAR-frame poses",
+        "source_sha256": "3a7f5ae4db916c1003ceefbc8b2a91e568c56936708f6662095753991211155a",
+        "start_relative_s": 1.7500000000000004,
+        "duration_s": 2.0,
+        "rays": 400000,
+        "step_ns": 1000000,
+        "translation_shift_m": [
+          -2.338317357916168,
+          -0.26048769947648776,
+          0.3428000131026423
+        ],
+        "gaps_over_20ms": 0,
+        "max_gt_gap_s": 0.012101410999999729,
+        "scope": "real measured motion, synthetic exact enclosure, nominal optics; not real scene/range validation"
+      },
+      "warmup_replays_per_mode": 1,
+      "objects": 8,
+      "sensors": 2,
+      "shared_candidate_captures": true,
+      "rays": 800000,
+      "baseline": "/tmp/mid360-shared-b65c96b7/baseline/backend.py",
+      "median_s": {
+        "baseline": 1.7735341480001807,
+        "candidate": 1.7875687009945977
+      },
+      "trials_s": {
+        "baseline": [
+          1.7735341480001807,
+          1.7661770469858311,
+          1.9583440499845892
+        ],
+        "candidate": [
+          1.7875687009945977,
+          1.7896674560033716,
+          1.7873693570145406
+        ]
+      },
+      "max_range_difference_m": 0.0,
+      "valid": {
+        "baseline": 800000,
+        "candidate": 800000
+      },
+      "scope": "same-process alternating native acquisition, owned range readback; rigid adds USD edits/captures; no physics, rendering, XYZ packaging or transport",
+      "candidate_change_percent": 0.7913325497703072
+    }
+  },
+  "verification": {
+    "cargo fmt --all -- --check": "pass",
+    "mbx test --locked": "36 unit tests and 15 doctests passed",
+    "mbx clippy --all-targets --locked -- -D warnings": "pass",
+    "cargo deny --config deny.toml check": "pass with existing unmatched license allowance and duplicate-version warnings; scoped async-std exception unchanged",
+    "Python unittest existing parent mujoco-venv": "12 tests passed",
+    "py_compile": "pass",
+    "ruff format --check": "pass",
+    "VitePress build and production link check": "pass, 2480 links/assets across 43 pages; reused parent node_modules via temporary symlink, removed after check",
+    "git diff --check": "pass"
+  },
+  "limitations": [
+    "No measured whole-acquisition speedup from shared capture in this workload.",
+    "Timing includes USD authoring, capture, sensor metadata, native Warp tracing and owned range readback; excludes physics, rendering, XYZ packaging and transport. Separate correctness regression used actual native PhysX USD writeback.",
+    "One warmup per mode and three alternating trials; 8 objects, 2000 distinct 1 ms snapshots; independent sensor positions.",
+    "Per-sensor GPU upload retained; shared device upload and AABB gating remain unmeasured and unimplemented.",
+    "No CAD/arena or extension-full-callback timing performed.",
+    "CHANGELOG and consolidated evidence left to parent; changes uncommitted, no pushes or PRs."
+  ],
+  "source_provenance": {
+    "integrations/isaac-sim/exts/hxyulin.mid360/mid360/isaac/backend.py": {
+      "native_sha256": "be48189aa2bf926cf2b3575108c4aad116a4c4fbf1bf22583f8cbf9854080fee",
+      "ast_sha256": "35b7f16a93ff3b38121aa853a0e7c9db2f8c6c120046cdbab42a8bac2668be43",
+      "working_tree_sha256": "3a67fb600bbeb3696bc8659235db2d0bd0c6b58b902775c74e6e050f962f722f"
+    },
+    "integrations/isaac-sim/tests/hybrid.py": {
+      "native_sha256": "5253d97d80711a6aca60672818a725f36ec775b6706012d7d7b12a5fbd0ef007",
+      "ast_sha256": "4108ce029aa97e02e03dbe591e6b43eaabcaae195d4165fae342337306312bba",
+      "working_tree_sha256": "5253d97d80711a6aca60672818a725f36ec775b6706012d7d7b12a5fbd0ef007"
+    },
+    "integrations/isaac-sim/tests/history_benchmark.py": {
+      "native_sha256": "f87173f9e1b2e9a8c4712a40fecab1ebbf7a653c918c5ebb0d7a6aaffa56e35b",
+      "ast_sha256": "672d2d38acf410b378c7643db9cd14f6942846c3fb1e337a2afe23b084dee09d",
+      "working_tree_sha256": "f87173f9e1b2e9a8c4712a40fecab1ebbf7a653c918c5ebb0d7a6aaffa56e35b"
+    }
+  },
+  "integration_note": "Initial measurements and source provenance above predate review fixes. The final candidate, checks and timings are recorded in precommit_review; use those measurements for the committed implementation.",
+  "initial_integrated_source_sha256": {
+    "integrations/isaac-sim/exts/hxyulin.mid360/mid360/isaac/backend.py": "3a67fb600bbeb3696bc8659235db2d0bd0c6b58b902775c74e6e050f962f722f",
+    "integrations/isaac-sim/tests/hybrid.py": "27c3c8fdbf6cdcc3ca8da522a9a13261751cbf9118605fdc2f60806e8dd27e06",
+    "integrations/isaac-sim/tests/history_benchmark.py": "f87173f9e1b2e9a8c4712a40fecab1ebbf7a653c918c5ebb0d7a6aaffa56e35b"
+  },
+  "precommit_review": {
+    "fixed_findings": [
+      "Validate source finiteness, affine homogeneous components and finite nonsingular determinant before inversion; Gf inverse fallback alone did not reject invalid sources.",
+      "Invalidate histories on holeIndices and subdivisionScheme edits to prevent stale mesh BVHs."
+    ],
+    "source_sha256": {
+      "integrations/isaac-sim/exts/hxyulin.mid360/config/extension.toml": "e22f92839067243871fc02a490b2955384e0377b65fcd640ed0dd794899a07bb",
+      "integrations/isaac-sim/exts/hxyulin.mid360/mid360/isaac/backend.py": "4ef2fc96380940cdefb43a8c45e14e0067c15fa992576b1a4c8a27060484aeb5",
+      "integrations/isaac-sim/exts/hxyulin.mid360/mid360/isaac/__init__.py": "cbcf05c8472b2dc4cc9123cf2a3bcb278296e0858ced03a290212b5d4b73c836",
+      "integrations/isaac-sim/exts/hxyulin.mid360/mid360/isaac/extension.py": "b7ba377127e72d7778f1b3101bd7efbe1346ee9f39f28e41223c1f792ee164e9",
+      "integrations/isaac-sim/exts/hxyulin.mid360/mid360/isaac/nominal.json": "d6f72e21a5e318446c2ec737e890beb5a90dff436ec48aed5319beb281d53175",
+      "integrations/isaac-sim/tests/hybrid.py": "448ac1004a727ba7ccc59d969f015be22c231e178f8ea6f95c801fd36991f8f1",
+      "integrations/isaac-sim/tests/history_benchmark.py": "f87173f9e1b2e9a8c4712a40fecab1ebbf7a653c918c5ebb0d7a6aaffa56e35b"
+    },
+    "native_correctness": {
+      "rigid_trace": true,
+      "points": 4849,
+      "moving_hits": 897,
+      "moving_source_meshes": 2,
+      "max_range_difference_m": 5.245208740234375e-06,
+      "checks": "union equivalence across multiple nested translating/rotating/reflected/scaled meshes and turning sensor; stride/fractions/time; near static and dynamic occlusion; owned outputs; static-change failure; rigid shared lifetime, identity, singular/removal/recreation and bounds; actual physics writeback shared by two sensors"
+    },
+    "supplemental_checks": {
+      "guard_equivalence": {
+        "float64_columns": 20736,
+        "determinant_values": 12
+      },
+      "invalid_source_cases_rejected": 64,
+      "mesh_edit_invalidation": "holeIndices and subdivisionScheme reject cached capture and pending flush",
+      "snapshot_identity_and_affine_checks": "passed"
+    },
+    "measurements": {
+      "1-sensor-self": {
+        "mode": "rigid",
+        "backend_sha256": {
+          "baseline": "9901a2f07bd998ff153dc8eca342daed6656b0ee29196c00b537990ab140162b",
+          "candidate": "4ef2fc96380940cdefb43a8c45e14e0067c15fa992576b1a4c8a27060484aeb5"
+        },
+        "source_metadata": {
+          "source": "JEPLO EIL_Mask2 independent 100 Hz Qualisys LiDAR-frame poses",
+          "source_sha256": "3a7f5ae4db916c1003ceefbc8b2a91e568c56936708f6662095753991211155a",
+          "start_relative_s": 1.7500000000000004,
+          "duration_s": 2.0,
+          "rays": 400000,
+          "step_ns": 1000000,
+          "translation_shift_m": [
+            -2.338317357916168,
+            -0.26048769947648776,
+            0.3428000131026423
+          ],
+          "gaps_over_20ms": 0,
+          "max_gt_gap_s": 0.012101410999999729,
+          "scope": "real measured motion, synthetic exact enclosure, nominal optics; not real scene/range validation"
+        },
+        "warmup_replays_per_mode": 1,
+        "objects": 8,
+        "sensors": 1,
+        "shared_candidate_captures": false,
+        "rays": 400000,
+        "baseline": "/tmp/mid360-review-isaac-r3-20261023/baseline/backend.py",
+        "median_s": {
+          "baseline": 1.3519444809935521,
+          "candidate": 1.3786751570005435
+        },
+        "trials_s": {
+          "baseline": [
+            1.3593490659841336,
+            1.3494540830142796,
+            1.3519444809935521,
+            1.3506558760127518,
+            1.353655352984788
+          ],
+          "candidate": [
+            1.3816560100240167,
+            1.3786751570005435,
+            1.3749604870099574,
+            1.3727117259986699,
+            1.384639229014283
+          ]
+        },
+        "max_range_difference_m": 0.0,
+        "valid": {
+          "baseline": 400000,
+          "candidate": 400000
+        },
+        "scope": "same-process alternating native acquisition, owned range readback; rigid adds USD edits/captures; no physics, rendering, XYZ packaging or transport",
+        "candidate_slowdown_percent": 1.9772021989650668,
+        "paired_slowdown_percent": [
+          1.6410019029022171,
+          2.1653996496859396,
+          1.7024372183901182,
+          1.6329733115313383,
+          2.2889043330842185
+        ]
+      },
+      "2-sensor-shared": {
+        "mode": "rigid",
+        "backend_sha256": {
+          "baseline": "9901a2f07bd998ff153dc8eca342daed6656b0ee29196c00b537990ab140162b",
+          "candidate": "4ef2fc96380940cdefb43a8c45e14e0067c15fa992576b1a4c8a27060484aeb5"
+        },
+        "source_metadata": {
+          "source": "JEPLO EIL_Mask2 independent 100 Hz Qualisys LiDAR-frame poses",
+          "source_sha256": "3a7f5ae4db916c1003ceefbc8b2a91e568c56936708f6662095753991211155a",
+          "start_relative_s": 1.7500000000000004,
+          "duration_s": 2.0,
+          "rays": 400000,
+          "step_ns": 1000000,
+          "translation_shift_m": [
+            -2.338317357916168,
+            -0.26048769947648776,
+            0.3428000131026423
+          ],
+          "gaps_over_20ms": 0,
+          "max_gt_gap_s": 0.012101410999999729,
+          "scope": "real measured motion, synthetic exact enclosure, nominal optics; not real scene/range validation"
+        },
+        "warmup_replays_per_mode": 1,
+        "objects": 8,
+        "sensors": 2,
+        "shared_candidate_captures": true,
+        "rays": 800000,
+        "baseline": "/tmp/mid360-review-isaac-r3-20261023/baseline/backend.py",
+        "median_s": {
+          "baseline": 1.7383268580015283,
+          "candidate": 1.7883937930164393
+        },
+        "trials_s": {
+          "baseline": [
+            1.7383268580015283,
+            1.7377482939918991,
+            1.913350047019776,
+            1.7360228400211781,
+            1.7401566309854388
+          ],
+          "candidate": [
+            1.7912611569918226,
+            1.7883937930164393,
+            1.7845309909898788,
+            1.78096279600868,
+            1.790477614995325
+          ]
+        },
+        "max_range_difference_m": 0.0,
+        "valid": {
+          "baseline": 800000,
+          "candidate": 800000
+        },
+        "scope": "same-process alternating native acquisition, owned range readback; rigid adds USD edits/captures; no physics, rendering, XYZ packaging or transport",
+        "candidate_slowdown_percent": 2.880179569478125,
+        "paired_slowdown_percent": [
+          3.04512921414275,
+          2.914432383541521,
+          -6.732644464641746,
+          2.588673083756987,
+          2.8917502662613614
+        ]
+      }
+    },
+    "scope": "Existing Talos Isaac Sim 6.2.0 Linux RTX5090 container, Warp 1.17.0. Exclusive local fcntl performance lock held around all SSH/native work. Synthetic 8-object geometry and the same real two-second recorded 1 ms pose fixture. Each benchmark has five alternating baseline/candidate trials after one warmup per backend. No CPU pinning; a two-sensor baseline trial was an outlier (1.913s vs median 1.738s), so these are bounded medians without confidence intervals. Range agreement asserted after final measured replay. Timings include native acquisition, owned range readback, USD edits/captures; exclude physics, rendering, XYZ packaging and transport. No whole-simulator speedup or Linux ROS runtime claim.",
+    "conclusion": "Small acquisition regressions remain: 1.98% for one-sensor self-capture and 2.88% for two-sensor shared capture. No whole-simulator speedup established. One-sensor shared mode was not repeated."
+  }
+}

@@ -36,12 +36,21 @@ impl LivoxPublisher {
     /// Create DDS endpoints. Installed interfaces must contain unmodified
     /// `livox_ros_driver2/msg/CustomMsg` and `rosgraph_msgs/msg/Clock`.
     pub fn new(node: &Node, topic: &str) -> Result<Self> {
+        Self::new_with_qos(
+            node,
+            topic,
+            rclrs::QoSProfile::default().keep_last(5).best_effort(),
+        )
+    }
+    /// Create a point endpoint with caller-selected QoS; `/clock` keeps its defaults.
+    /// Reliable delivery may block in the RMW and should run outside physics stepping.
+    pub fn new_with_qos(node: &Node, topic: &str, qos: rclrs::QoSProfile) -> Result<Self> {
         let points_type = MessageTypeName::try_from("livox_ros_driver2/msg/CustomMsg")?;
         let clock_type = MessageTypeName::try_from("rosgraph_msgs/msg/Clock")?;
         Ok(Self {
             points_metadata: DynamicMessageMetadata::new(points_type.clone())?,
             clock_metadata: DynamicMessageMetadata::new(clock_type.clone())?,
-            points: node.create_dynamic_publisher(points_type, topic.keep_last(5).best_effort())?,
+            points: node.create_dynamic_publisher(points_type, topic.qos(qos))?,
             clock: node
                 .create_dynamic_publisher(clock_type, "/clock".keep_last(1).best_effort())?,
         })

@@ -380,6 +380,78 @@ class MujocoTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             sensor.scan_rolling(0, 200, (p0, [0, 0, 0, 0]), (p1, q))
 
+    def test_exact_origins_resolve_edge_hidden_by_midpoint_grouping(self):
+        xml = XML.replace('<body name="robot">',
+                          '<geom type="box" pos="2 0 .8" size=".1 .05 .2"/>'
+                          '<body name="robot">')
+        _, _, sensor = self.setup_sensor(xml)
+        q = [0, 0, 0, 1]
+        a, b = ([0, 0, .8], q), ([0, .2, .8], q)
+        with patch("mid360_sim.mujoco.directions",
+                   return_value=np.tile([1., 0., 0.], (3, 1))):
+            grouped = sensor.scan_rolling(0, 3, a, b, origin_tolerance_m=1)
+            exact = sensor.scan_rolling(0, 3, a, b, query_mode="exact")
+        np.testing.assert_allclose(grouped.ranges_m, [4.9, 4.9, 4.9])
+        np.testing.assert_allclose(exact.ranges_m, [1.9, 4.9, 4.9])
+
+    def test_exact_mode_native_regressions(self):
+        original = MujocoSensor.scan_rolling
+
+        def exact(sensor, *args, **kwargs):
+            return original(sensor, *args, **kwargs, query_mode="exact")
+
+        # Reuse independent native/analytic oracles for both query policies.
+        with patch.object(MujocoSensor, "scan_rolling", exact):
+            for check in (
+                self.test_rolling_matches_individual_native_rays_and_owns_results,
+                self.test_rolling_small_and_near_half_turn_about_arbitrary_axis,
+                self.test_rolling_chunk_stride_and_near_occlusion,
+                self.test_rolling_queries_current_nearest_moving_geometry,
+            ):
+                with self.subTest(check=check.__name__):
+                    check()
+
+    def test_exact_public_ray_bitwise_filters_ranges_and_validation(self):
+        model, data, sensor = self.setup_sensor(body_exclude=1, max_range_m=5)
+        p0, p1 = [0, 0, .8], [.02, .01, .8]
+        q0, q1 = [0, 0, 0, 1], [0, 0, .1, np.sqrt(.99)]
+        fraction = (.2, .8)
+        local = directions(1001, 67, 3)
+        t, world = reference_rolling_rays(local, (p0, q0), (p1, q1), fraction)
+        origins = np.asarray(p0) + (np.asarray(p1) - p0) * t[:, None]
+        ids, ranges = np.empty(67, np.int32), np.empty(67)
+        for i in range(67):
+            ranges[i] = mujoco.mj_ray(
+                model, data, origins[i], world[i], None, 1, 1, ids[i:i+1]
+            )
+        invalid = (ranges < .1) | (ranges > 5) | ~np.isfinite(ranges)
+        ranges[invalid], ids[invalid] = -1, -1
+        with patch("mid360_sim.mujoco.mujoco.mj_multiRay",
+                   side_effect=AssertionError("exact must use public scalar rays")):
+            frame = sensor.scan_rolling(
+                1001, 67, (p0, q0), (p1, q1), stride=3,
+                pose_fraction=fraction, query_mode="exact"
+            )
+        np.testing.assert_array_equal(frame.ranges_m, ranges)
+        np.testing.assert_array_equal(frame.geom_ids, ids)
+        before = data.qpos.copy()
+        sensor.scan_rolling(0, 1, (p0, q0), (p1, q1), query_mode="exact")
+        np.testing.assert_array_equal(data.qpos, before)
+        self.assertEqual(data.time, 0)
+        for mode in ("native", "typo", None):
+            with self.assertRaisesRegex(ValueError, "query_mode"):
+                sensor.scan_rolling(0, 1, (p0, q0), (p1, q1), query_mode=mode)
+        for count in (0, 200001):
+            with self.assertRaises(ValueError):
+                sensor.scan_rolling(0, count, (p0, q0), (p1, q1), query_mode="exact")
+        other = mujoco.MjModel.from_xml_string(XML)
+        sensor.data = mujoco.MjData(other)
+        with self.assertRaisesRegex(ValueError, "belonging"):
+            sensor.scan_rolling(0, 1, (p0, q0), (p1, q1), query_mode="exact")
+        sensor.data = object()
+        with self.assertRaises(TypeError):
+            sensor.scan_rolling(0, 1, (p0, q0), (p1, q1), query_mode="exact")
+
     def test_validation(self):
         model, data, sensor = self.setup_sensor()
         for args in [(0, 0), (-1, 100), (2**64, 100)]:

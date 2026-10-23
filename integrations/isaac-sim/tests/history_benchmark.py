@@ -22,8 +22,12 @@ parser.add_argument("--output", type=Path, required=True)
 parser.add_argument("--baseline", type=Path)
 parser.add_argument("--mode", choices=("static", "rigid"), default="static")
 parser.add_argument("--objects", type=int, choices=(1, 8, 32), default=8)
+parser.add_argument("--sensors", type=int, choices=(1, 2), default=1)
+parser.add_argument("--share-captures", action="store_true")
 parser.add_argument("--trials", type=int, choices=(3, 5, 7), default=7)
 args = parser.parse_args()
+if args.mode != "rigid" and (args.sensors != 1 or args.share_captures):
+    parser.error("multiple sensors and shared captures require rigid mode")
 args.output.parent.mkdir(parents=True, exist_ok=True)
 from isaacsim import SimulationApp
 
@@ -77,9 +81,14 @@ try:
         dynamic = module.Mid360Sensor(stage, roots=("/World/Moving",), min_range_m=0)
         return module.RigidHybridSensor(static, dynamic)
 
-    sensors = {name: make(module) for name, module in modules.items()}
+    sensors = {
+        name: [make(module) for _ in range(args.sensors)]
+        for name, module in modules.items()
+    }
 
-    def replay(sensor):
+    def replay(name):
+        consumers = sensors[name]
+        sensor = consumers[0]
         frames = []
         start = time.perf_counter()
         if args.mode == "static":
@@ -90,6 +99,10 @@ try:
                 frames.append(sensor.flush().ranges_m)
         else:
             for step in range(2000):
+                if step % 100 == 0 and args.share_captures and name == "candidate":
+                    history = backend.SceneTransformHistory(
+                        stage, sensor.dynamic.paths, generation=step // 100
+                    )
                 for index, (translation, rotation) in enumerate(movers):
                     phase = step * 0.001 + index
                     translation.Set(
@@ -100,25 +113,36 @@ try:
                         )
                     )
                     rotation.Set(Gf.Vec3f(step * 0.03, index * 7.0, step * 0.07))
-                sensor.scan(
-                    step * 200,
-                    200,
-                    (positions[step], rotations[step]),
-                    (positions[step + 1], rotations[step + 1]),
-                    pose_fraction=(0, 199 / 200),
+                snapshot = (
+                    history.capture(step)
+                    if args.share_captures and name == "candidate"
+                    else None
                 )
-                if step % 100 == 99:
-                    frames.append(sensor.flush().ranges_m)
+                for index, consumer in enumerate(consumers):
+                    kwargs = {} if snapshot is None else {"scene_snapshot": snapshot}
+                    consumer.scan(
+                        step * 200,
+                        200,
+                        (positions[step] + (0, index * 0.1, 0), rotations[step]),
+                        (
+                            positions[step + 1] + (0, index * 0.1, 0),
+                            rotations[step + 1],
+                        ),
+                        pose_fraction=(0, 199 / 200),
+                        **kwargs,
+                    )
+                    if step % 100 == 99:
+                        frames.append(consumer.flush().ranges_m)
         elapsed = time.perf_counter() - start
         return elapsed, np.concatenate(frames)
 
-    for sensor in sensors.values():
-        replay(sensor)
+    for name in sensors:
+        replay(name)
     timings, outputs = {name: [] for name in sensors}, {}
     for trial in range(args.trials):
         order = list(sensors) if trial % 2 == 0 else list(reversed(sensors))
         for name in order:
-            elapsed, outputs[name] = replay(sensors[name])
+            elapsed, outputs[name] = replay(name)
             timings[name].append(elapsed)
     if args.baseline is not None:
         np.testing.assert_array_equal(
@@ -139,7 +163,9 @@ try:
         source_metadata=metadata,
         warmup_replays_per_mode=1,
         objects=len(movers),
-        rays=400000,
+        sensors=args.sensors,
+        shared_candidate_captures=args.share_captures,
+        rays=400000 * args.sensors,
         baseline=str(args.baseline) if args.baseline is not None else None,
         median_s={name: float(np.median(values)) for name, values in timings.items()},
         trials_s=timings,

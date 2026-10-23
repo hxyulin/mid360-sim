@@ -26,15 +26,17 @@ impl Drop for Subscriber {
 
 #[test]
 fn packet_size_transitions_preserve_native_fields() -> Result<()> {
-    check_publisher::<LivoxPublisher>()?;
-    #[cfg(feature = "ros2-typed")]
-    check_publisher::<mid360_sim::publisher::TypedLivoxPublisher>()?;
+    for reliable in [false, true] {
+        check_publisher::<LivoxPublisher>(reliable)?;
+        #[cfg(feature = "ros2-typed")]
+        check_publisher::<mid360_sim::publisher::TypedLivoxPublisher>(reliable)?;
+    }
     Ok(())
 }
 
 trait TestPublisher: Sized {
     const SINGLETON: bool;
-    fn new(node: &rclrs::Node, topic: &str) -> Result<Self>;
+    fn new(node: &rclrs::Node, topic: &str, reliable: bool) -> Result<Self>;
     fn subscription_count(&self) -> Result<usize>;
     fn publish(&self, packet: &LivoxPacket) -> Result<()>;
     fn publish_clock(&self, time: u64) -> Result<()>;
@@ -43,8 +45,12 @@ macro_rules! test_publisher {
     ($ty:ty, $singleton:expr) => {
         impl TestPublisher for $ty {
             const SINGLETON: bool = $singleton;
-            fn new(node: &rclrs::Node, topic: &str) -> Result<Self> {
-                <$ty>::new(node, topic)
+            fn new(node: &rclrs::Node, topic: &str, reliable: bool) -> Result<Self> {
+                if reliable {
+                    <$ty>::new_with_qos(node, topic, rclrs::QoSProfile::default().reliable())
+                } else {
+                    <$ty>::new(node, topic)
+                }
             }
             fn subscription_count(&self) -> Result<usize> {
                 <$ty>::subscription_count(self)
@@ -62,7 +68,7 @@ test_publisher!(LivoxPublisher, false);
 #[cfg(feature = "ros2-typed")]
 test_publisher!(mid360_sim::publisher::TypedLivoxPublisher, true);
 
-fn check_publisher<P: TestPublisher>() -> Result<()> {
+fn check_publisher<P: TestPublisher>(reliable: bool) -> Result<()> {
     let context = rclrs::Context::new(
         std::iter::empty::<String>(),
         rclrs::InitOptions::new().with_domain_id(Some(125)),
@@ -72,7 +78,7 @@ fn check_publisher<P: TestPublisher>() -> Result<()> {
     let name = format!("publisher_regression_{}_{mode}", std::process::id());
     let node = executor.create_node(name.as_str())?;
     let topic = format!("/publisher_regression_{}_{mode}", std::process::id());
-    let livox = P::new(&node, &format!("{topic}/livox"))?;
+    let livox = P::new(&node, &format!("{topic}/livox"), reliable)?;
     let cloud = PointCloudPublisher::new(&node, &format!("{topic}/cloud"))?;
     let mut subscriber = Subscriber(
         Command::new("python")
@@ -82,6 +88,7 @@ fn check_publisher<P: TestPublisher>() -> Result<()> {
             ))
             .arg(&topic)
             .arg(if P::SINGLETON { "typed" } else { "dynamic" })
+            .arg(if reliable { "reliable" } else { "best_effort" })
             .env("ROS_DOMAIN_ID", "125")
             .stdout(Stdio::piped())
             .spawn()?,

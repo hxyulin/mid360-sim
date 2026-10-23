@@ -203,17 +203,85 @@ Run in the [MuJoCo environment](install/mujoco.md):
 python scripts/benchmark-query-batches.py > local-assets/query-batches.json
 ```
 
+## Matched delivery controls
+
+The follow-up uses the actual publishers and one rclpy subscriber, two devices,
+20,000 points per device at 10 Hz, three alternating pairs of 30 frames.
+Each control changes one setting from best-effort depth 5. Measured messages
+are neither acknowledged nor retried by the application; a 300 ms drain follows
+each run. [Raw sends, arrivals, source hashes and protocol](/benchmarks/delivery-controls-m5-max.json)
+record the shared, unpinned macOS arm64/Fast DDS host. Control blocks run in a
+fixed order, so small timing differences are not causal evidence.
+
+| Control | Dynamic received / sent | Typed received / sent |
+|---|---:|---:|
+| Decoded subscriber, default QoS | 129 / 180 | 114 / 180 |
+| Serialized-byte subscriber | 125 / 180 | 105 / 180 |
+| Depth 20 | 128 / 180 | 105 / 180 |
+| Reliable QoS | 180 / 180 | 180 / 180 |
+| Separate device publications by 5 ms | 134 / 180 | 114 / 180 |
+
+Reliable publishing took median 4.804/3.379 ms per dynamic/typed device set;
+maximum publication completion lateness stayed below 17 ms. Received-packet
+callback latency was 32.2/35.3 ms, versus 24.6/25.7 ms at default QoS. Missing
+packets are absent from latency statistics, and the raw callback excludes
+deserialization, so those latency populations are not equivalent. These short
+runs support caller-selected reliable QoS for this workload, not a delivery
+guarantee or a middleware-wide diagnosis. Raw reception and deeper queues did
+not remove losses; faster construction alone did not improve delivery.
+A separate precommit repeat reversed the control block order: reliable again
+delivered 180/180 for both paths, while best effort delivered 123/180 dynamic
+and 110/180 typed. Reliable publish sets took 5.261/2.910 ms and received-packet
+latency was 38.7/36.7 ms. The repeat is retained in the same evidence file.
+
+## Supported exact MuJoCo queries
+
+`scan_rolling(query_mode="exact")` now uses public Python `mj_ray` calls at each
+emission's interpolated origin. Grouped queries remain the default. Complete
+acquisition measurements include physics, refreshed geometry, optics, queries,
+owned output and 100 ms cloud assembly, excluding transport. With three
+interleaved pairs, exact/grouped wall-time ratios were 0.42–0.83 in the fast
+cluttered cases and 1.37–2.37 near stationary motion. These are synthetic scenes
+on a shared host, not universal crossover thresholds.
+[Paired measurements and source provenance](/benchmarks/mujoco-exact-rolling-m5-max.json)
+describe the workload. The fused C-loop prototype remains separate: the supported
+mode uses no private pointer bridge or external native extension.
+A fresh precommit repeat of the complete matrix gave exact/grouped ratios of
+0.41–0.76 for fast clutter and 1.43–2.50 near stationary motion; simple fast-motion
+cases ranged from 0.92 to 1.64. Explicit selection remains appropriate.
+
+## Shared Isaac history in acquisition
+
+`SceneTransformHistory` now provides explicit shared captures for rigid-history
+consumers; self-capture uses bounded contiguous storage. Sensor poses, times and
+flush schedules remain independent. Native regressions include actual PhysX
+writeback, near occlusion, nested scale/reflection, removal/recreation and retained
+snapshot ownership. The union-reference comparison differed by at most 5.25 µm.
+
+Final precommit measurements used five alternating warmed acquisition trials on
+an RTX 5090, eight objects and 2,000 distinct 1 ms captures. One-sensor self-capture
+measured 1.352 → 1.379 s (+1.98%); two sensors sharing captures measured
+1.738 → 1.788 s (+2.88%). Baseline and candidate ranges matched exactly. Review
+also fixed invalid source-transform acceptance and stale mesh histories after
+hole/subdivision edits; all final native checks passed.
+
+The replay includes USD edits, capture, tracing and owned range readback, excluding
+physics, rendering, XYZ packaging and transport. Small acquisition regressions
+remain; earlier capture-only savings did not carry through this workload. Trials
+were not CPU-pinned, have no confidence intervals, and include one two-sensor
+baseline outlier. GPU upload sharing and AABB gating remain unimplemented.
+[Paired trials, native checks and source provenance](/benchmarks/isaac-shared-history-rtx5090.json)
+record the scope. See [shared capture usage](guide/acquisition.md#explicit-shared-isaac-rigid-captures).
+
 ## Adoption and remaining evaluation
 
 1. The optional **typed Livox endpoint** now uses the existing owned packet
-   contract. Next compare matched native publisher/subscriber runs
-   at one/two sensors and full rate/stride 3. Keep empty/singleton/changing sizes,
-   first-emission timebases and errors covered. Compare complete pipeline CPU
-   on deployment hosts. No middleware switch is justified by
-   these construction measurements.
+   contract. Matched delivery controls above retain existing defaults and expose
+   caller-selected QoS. Compare complete simulator/consumer CPU on deployment
+   hosts before selecting defaults. No middleware switch is justified yet.
 2. Keep current adapter batching and short coherent scene captures. Investigate
-   a native per-ray-origin backend or grouped-query setup reuse for fast
-   translation, rather than relaxing the tolerance or freezing moving poses.
+   a supported fused per-ray-origin binding for fast translation; the public
+   scalar exact mode is available now. Do not relax the tolerance or freeze poses.
 3. Add a bounded Rust batch interface only alongside a backend that can exploit
    it. Require explicit per-emission times, perturbed directions, exact result
    ordering and first-surface occlusion. Compare complete one/two-device

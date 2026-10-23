@@ -1,0 +1,2240 @@
+{
+  "mujoco": "3.7.0",
+  "numpy": "2.5.4",
+  "machine": "macOS-27.0.1-arm64-arm-64bit",
+  "steps": 1000,
+  "dt_s": 0.001,
+  "scope": "physics, capture, rolling query, owned output, 100 ms assembly; no transport",
+  "exact_implementation": "public Python mj_ray per emission, NOT native fused loop",
+  "cases": [
+    {
+      "clutter": false,
+      "speed_m_s": 20.0,
+      "sensors": 1,
+      "stride": 1,
+      "rays": 200,
+      "runs": [
+        {
+          "mode": "grouped",
+          "wall_s": 0.19467558292672038,
+          "step_median_ms": 0.1848749816417694,
+          "step_p95_ms": 0.25585439288988704,
+          "steps_over_1ms": 1,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.3018132920842618,
+          "step_median_ms": 0.2928335452452302,
+          "step_p95_ms": 0.36860801046714187,
+          "steps_over_1ms": 1,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.3051014170050621,
+          "step_median_ms": 0.2933335490524769,
+          "step_p95_ms": 0.38101032841950655,
+          "steps_over_1ms": 1,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 7
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.20283495797775686,
+          "step_median_ms": 0.18685439135879278,
+          "step_p95_ms": 0.28215772472321976,
+          "steps_over_1ms": 1,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 7
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.1989524159580469,
+          "step_median_ms": 0.18643750809133053,
+          "step_p95_ms": 0.2604922628961501,
+          "steps_over_1ms": 0,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.3054474589880556,
+          "step_median_ms": 0.298728933557868,
+          "step_p95_ms": 0.37450686795637006,
+          "steps_over_1ms": 0,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 7
+        }
+      ]
+    },
+    {
+      "clutter": false,
+      "speed_m_s": 20.0,
+      "sensors": 1,
+      "stride": 3,
+      "rays": 67,
+      "runs": [
+        {
+          "mode": "grouped",
+          "wall_s": 0.17524991696700454,
+          "step_median_ms": 0.16620790120214224,
+          "step_p95_ms": 0.22700359113514415,
+          "steps_over_1ms": 0,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.17230162490159273,
+          "step_median_ms": 0.16427109949290752,
+          "step_p95_ms": 0.22167961578816175,
+          "steps_over_1ms": 0,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.1741035000886768,
+          "step_median_ms": 0.16908359248191118,
+          "step_p95_ms": 0.21889375057071445,
+          "steps_over_1ms": 0,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 7
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.1792389580514282,
+          "step_median_ms": 0.16989605501294136,
+          "step_p95_ms": 0.23279193555936195,
+          "steps_over_1ms": 0,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 7
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.18594712507911026,
+          "step_median_ms": 0.17452100291848183,
+          "step_p95_ms": 0.2492225612513721,
+          "steps_over_1ms": 0,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.1835094999987632,
+          "step_median_ms": 0.17352041322737932,
+          "step_p95_ms": 0.25760483695194125,
+          "steps_over_1ms": 0,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 7
+        }
+      ]
+    },
+    {
+      "clutter": false,
+      "speed_m_s": 20.0,
+      "sensors": 2,
+      "stride": 1,
+      "rays": 200,
+      "runs": [
+        {
+          "mode": "grouped",
+          "wall_s": 0.4691015419084579,
+          "step_median_ms": 0.4524789983406663,
+          "step_p95_ms": 0.6145295221358537,
+          "steps_over_1ms": 2,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.7635772079229355,
+          "step_median_ms": 0.7370628882199526,
+          "step_p95_ms": 0.9050463908351957,
+          "steps_over_1ms": 17,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.8396388341207057,
+          "step_median_ms": 0.8160208817571402,
+          "step_p95_ms": 1.0229942970909178,
+          "steps_over_1ms": 68,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 7
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.5552429999224842,
+          "step_median_ms": 0.5306875100359321,
+          "step_p95_ms": 0.7022771518677473,
+          "steps_over_1ms": 0,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 7
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.5171234579756856,
+          "step_median_ms": 0.5002709804102778,
+          "step_p95_ms": 0.6645125453360379,
+          "steps_over_1ms": 1,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.6069462089799345,
+          "step_median_ms": 0.5873334594070911,
+          "step_p95_ms": 0.7433663704432547,
+          "steps_over_1ms": 7,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 7
+        }
+      ]
+    },
+    {
+      "clutter": false,
+      "speed_m_s": 20.0,
+      "sensors": 2,
+      "stride": 3,
+      "rays": 67,
+      "runs": [
+        {
+          "mode": "grouped",
+          "wall_s": 0.3506990000605583,
+          "step_median_ms": 0.33733295276761055,
+          "step_p95_ms": 0.4454416339285671,
+          "steps_over_1ms": 1,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.379507957957685,
+          "step_median_ms": 0.3774375654757023,
+          "step_p95_ms": 0.48401030944660284,
+          "steps_over_1ms": 0,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.3888991251587868,
+          "step_median_ms": 0.3784585278481245,
+          "step_p95_ms": 0.5423939321190117,
+          "steps_over_1ms": 0,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 7
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.4047401249408722,
+          "step_median_ms": 0.3999790642410517,
+          "step_p95_ms": 0.5499208229593933,
+          "steps_over_1ms": 0,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 7
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.34892549994401634,
+          "step_median_ms": 0.3359371330589056,
+          "step_p95_ms": 0.446787814144045,
+          "steps_over_1ms": 1,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.34403120819479227,
+          "step_median_ms": 0.3321249969303608,
+          "step_p95_ms": 0.43071728432551026,
+          "steps_over_1ms": 1,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 7
+        }
+      ]
+    },
+    {
+      "clutter": false,
+      "speed_m_s": 0.1,
+      "sensors": 1,
+      "stride": 1,
+      "rays": 200,
+      "runs": [
+        {
+          "mode": "grouped",
+          "wall_s": 0.13138795807026327,
+          "step_median_ms": 0.12470793444663286,
+          "step_p95_ms": 0.15496229752898216,
+          "steps_over_1ms": 0,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.3061769169289619,
+          "step_median_ms": 0.2995000686496496,
+          "step_p95_ms": 0.37801424041390413,
+          "steps_over_1ms": 0,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.3385052499361336,
+          "step_median_ms": 0.3024579491466284,
+          "step_p95_ms": 0.39218792226165533,
+          "steps_over_1ms": 5,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 7
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.13732958305627108,
+          "step_median_ms": 0.12979202438145876,
+          "step_p95_ms": 0.16287250909954307,
+          "steps_over_1ms": 1,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 7
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.13211329211480916,
+          "step_median_ms": 0.12702052481472492,
+          "step_p95_ms": 0.16632716869935374,
+          "steps_over_1ms": 0,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.31260958407074213,
+          "step_median_ms": 0.30256249010562897,
+          "step_p95_ms": 0.385329604614526,
+          "steps_over_1ms": 0,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 7
+        }
+      ]
+    },
+    {
+      "clutter": false,
+      "speed_m_s": 0.1,
+      "sensors": 1,
+      "stride": 3,
+      "rays": 67,
+      "runs": [
+        {
+          "mode": "grouped",
+          "wall_s": 0.11292554205283523,
+          "step_median_ms": 0.10666705202311277,
+          "step_p95_ms": 0.14111013151705262,
+          "steps_over_1ms": 0,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.17453054198995233,
+          "step_median_ms": 0.16939593479037285,
+          "step_p95_ms": 0.2175649162381886,
+          "steps_over_1ms": 0,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.17989991698414087,
+          "step_median_ms": 0.172103988006711,
+          "step_p95_ms": 0.23786635138094422,
+          "steps_over_1ms": 1,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 7
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.11494908295571804,
+          "step_median_ms": 0.11016707867383957,
+          "step_p95_ms": 0.1275890739634633,
+          "steps_over_1ms": 1,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 7
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.11414966592565179,
+          "step_median_ms": 0.10993750765919685,
+          "step_p95_ms": 0.1356368069536983,
+          "steps_over_1ms": 0,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.17201145784929395,
+          "step_median_ms": 0.1667920732870698,
+          "step_p95_ms": 0.2161402604542672,
+          "steps_over_1ms": 0,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 7
+        }
+      ]
+    },
+    {
+      "clutter": false,
+      "speed_m_s": 0.1,
+      "sensors": 2,
+      "stride": 1,
+      "rays": 200,
+      "runs": [
+        {
+          "mode": "grouped",
+          "wall_s": 0.2670144159346819,
+          "step_median_ms": 0.255145481787622,
+          "step_p95_ms": 0.34662660909816617,
+          "steps_over_1ms": 1,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.6207055419217795,
+          "step_median_ms": 0.6042495369911194,
+          "step_p95_ms": 0.7545350119471549,
+          "steps_over_1ms": 2,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.6131391669623554,
+          "step_median_ms": 0.598083483055234,
+          "step_p95_ms": 0.73496411787346,
+          "steps_over_1ms": 1,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 7
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.2661814580205828,
+          "step_median_ms": 0.25418750010430813,
+          "step_p95_ms": 0.3466758527792988,
+          "steps_over_1ms": 0,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 7
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.26873854105360806,
+          "step_median_ms": 0.25404198095202446,
+          "step_p95_ms": 0.35835672169923777,
+          "steps_over_1ms": 0,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.6659412910230458,
+          "step_median_ms": 0.6480840966105461,
+          "step_p95_ms": 0.8007878903299569,
+          "steps_over_1ms": 8,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 7
+        }
+      ]
+    },
+    {
+      "clutter": false,
+      "speed_m_s": 0.1,
+      "sensors": 2,
+      "stride": 3,
+      "rays": 67,
+      "runs": [
+        {
+          "mode": "grouped",
+          "wall_s": 0.23605583305470645,
+          "step_median_ms": 0.21504191681742668,
+          "step_p95_ms": 0.35987907322123647,
+          "steps_over_1ms": 0,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.3236915001180023,
+          "step_median_ms": 0.3144375514239073,
+          "step_p95_ms": 0.37986896932125075,
+          "steps_over_1ms": 0,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.3231828750576824,
+          "step_median_ms": 0.31274999491870403,
+          "step_p95_ms": 0.39675387088209385,
+          "steps_over_1ms": 0,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 7
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.2238412918522954,
+          "step_median_ms": 0.20829099230468273,
+          "step_p95_ms": 0.3409830853343009,
+          "steps_over_1ms": 0,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 7
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.23878245893865824,
+          "step_median_ms": 0.21529151126742363,
+          "step_p95_ms": 0.2987395972013469,
+          "steps_over_1ms": 5,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 7
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.33674199995584786,
+          "step_median_ms": 0.32716640271246433,
+          "step_p95_ms": 0.4236355540342629,
+          "steps_over_1ms": 0,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 7
+        }
+      ]
+    },
+    {
+      "clutter": true,
+      "speed_m_s": 20.0,
+      "sensors": 1,
+      "stride": 1,
+      "rays": 200,
+      "runs": [
+        {
+          "mode": "grouped",
+          "wall_s": 0.5932682920247316,
+          "step_median_ms": 0.5716040031984448,
+          "step_p95_ms": 0.7190913544036448,
+          "steps_over_1ms": 3,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.45880395895801485,
+          "step_median_ms": 0.4350414965301752,
+          "step_p95_ms": 0.5633401451632379,
+          "steps_over_1ms": 3,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.4327593750786036,
+          "step_median_ms": 0.4166461294516921,
+          "step_p95_ms": 0.5330271436832845,
+          "steps_over_1ms": 0,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 135
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.5552992080338299,
+          "step_median_ms": 0.5395625485107303,
+          "step_p95_ms": 0.6609544740058482,
+          "steps_over_1ms": 2,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 135
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.5466205410193652,
+          "step_median_ms": 0.5346459802240133,
+          "step_p95_ms": 0.6475409143604338,
+          "steps_over_1ms": 0,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.44069858407601714,
+          "step_median_ms": 0.42937486432492733,
+          "step_p95_ms": 0.5325652076862751,
+          "steps_over_1ms": 1,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 135
+        }
+      ]
+    },
+    {
+      "clutter": true,
+      "speed_m_s": 20.0,
+      "sensors": 1,
+      "stride": 3,
+      "rays": 67,
+      "runs": [
+        {
+          "mode": "grouped",
+          "wall_s": 0.5043712500482798,
+          "step_median_ms": 0.46868796925991774,
+          "step_p95_ms": 0.6020038737915456,
+          "steps_over_1ms": 5,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.1938884169794619,
+          "step_median_ms": 0.18991704564541578,
+          "step_p95_ms": 0.22032028064131734,
+          "steps_over_1ms": 0,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.19529562490060925,
+          "step_median_ms": 0.19200006499886513,
+          "step_p95_ms": 0.21386314183473584,
+          "steps_over_1ms": 0,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 135
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.45223625004291534,
+          "step_median_ms": 0.4397499142214656,
+          "step_p95_ms": 0.48231045948341483,
+          "steps_over_1ms": 1,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 135
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.44345766701735556,
+          "step_median_ms": 0.43843756429851055,
+          "step_p95_ms": 0.4855975741520524,
+          "steps_over_1ms": 0,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.18472558399662375,
+          "step_median_ms": 0.18274993635714054,
+          "step_p95_ms": 0.20342128118500113,
+          "steps_over_1ms": 0,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 135
+        }
+      ]
+    },
+    {
+      "clutter": true,
+      "speed_m_s": 20.0,
+      "sensors": 2,
+      "stride": 1,
+      "rays": 200,
+      "runs": [
+        {
+          "mode": "grouped",
+          "wall_s": 1.059425000101328,
+          "step_median_ms": 1.0419795289635658,
+          "step_p95_ms": 1.2904503382742405,
+          "steps_over_1ms": 665,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.9065571250393987,
+          "step_median_ms": 0.8872710168361664,
+          "step_p95_ms": 1.0989747708663344,
+          "steps_over_1ms": 163,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.9729652090463787,
+          "step_median_ms": 0.9444791357964277,
+          "step_p95_ms": 1.1835891869850457,
+          "steps_over_1ms": 373,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 135
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 1.1321807918138802,
+          "step_median_ms": 1.112146070227027,
+          "step_p95_ms": 1.3328331522643566,
+          "steps_over_1ms": 981,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 135
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 1.0858554590959102,
+          "step_median_ms": 1.0673541110008955,
+          "step_p95_ms": 1.2346205534413455,
+          "steps_over_1ms": 909,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.82649120897986,
+          "step_median_ms": 0.8106668246909976,
+          "step_p95_ms": 0.9615754708647728,
+          "steps_over_1ms": 32,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 135
+        }
+      ]
+    },
+    {
+      "clutter": true,
+      "speed_m_s": 20.0,
+      "sensors": 2,
+      "stride": 3,
+      "rays": 67,
+      "runs": [
+        {
+          "mode": "grouped",
+          "wall_s": 0.9504035408608615,
+          "step_median_ms": 0.937562552280724,
+          "step_p95_ms": 1.08873404096812,
+          "steps_over_1ms": 190,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.4108149588573724,
+          "step_median_ms": 0.3988334210589528,
+          "step_p95_ms": 0.5019565229304135,
+          "steps_over_1ms": 0,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.4204114999156445,
+          "step_median_ms": 0.4128750879317522,
+          "step_p95_ms": 0.5121856345795095,
+          "steps_over_1ms": 0,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 135
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 1.0037219170480967,
+          "step_median_ms": 0.9885829640552402,
+          "step_p95_ms": 1.1789440526627004,
+          "steps_over_1ms": 408,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 135
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 1.0456909998320043,
+          "step_median_ms": 1.010686857625842,
+          "step_p95_ms": 1.242145523428917,
+          "steps_over_1ms": 559,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.4494714168831706,
+          "step_median_ms": 0.4268329357728362,
+          "step_p95_ms": 0.5967338569462299,
+          "steps_over_1ms": 1,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 135
+        }
+      ]
+    },
+    {
+      "clutter": true,
+      "speed_m_s": 0.1,
+      "sensors": 1,
+      "stride": 1,
+      "rays": 200,
+      "runs": [
+        {
+          "mode": "grouped",
+          "wall_s": 0.18908483302220702,
+          "step_median_ms": 0.177707988768816,
+          "step_p95_ms": 0.2623455715365708,
+          "steps_over_1ms": 0,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.45400550006888807,
+          "step_median_ms": 0.4327710485085845,
+          "step_p95_ms": 0.5669411271810532,
+          "steps_over_1ms": 2,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.44041575002484024,
+          "step_median_ms": 0.42685389053076506,
+          "step_p95_ms": 0.5403896095231175,
+          "steps_over_1ms": 0,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 135
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.18810716597363353,
+          "step_median_ms": 0.17783348448574543,
+          "step_p95_ms": 0.25163331301882863,
+          "steps_over_1ms": 0,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 135
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.1858376250602305,
+          "step_median_ms": 0.17816643230617046,
+          "step_p95_ms": 0.2391868154518306,
+          "steps_over_1ms": 0,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.42384487483650446,
+          "step_median_ms": 0.4129169974476099,
+          "step_p95_ms": 0.4983669845387339,
+          "steps_over_1ms": 0,
+          "points": 200000,
+          "messages": 10,
+          "ngeom": 135
+        }
+      ]
+    },
+    {
+      "clutter": true,
+      "speed_m_s": 0.1,
+      "sensors": 1,
+      "stride": 3,
+      "rays": 67,
+      "runs": [
+        {
+          "mode": "grouped",
+          "wall_s": 0.14184379111975431,
+          "step_median_ms": 0.13595796190202236,
+          "step_p95_ms": 0.16790428198873994,
+          "steps_over_1ms": 0,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.21480316598899662,
+          "step_median_ms": 0.2092079957947135,
+          "step_p95_ms": 0.2629913506098091,
+          "steps_over_1ms": 0,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.21360337478108704,
+          "step_median_ms": 0.20933314226567745,
+          "step_p95_ms": 0.25971253635361785,
+          "steps_over_1ms": 0,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 135
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.15313041699118912,
+          "step_median_ms": 0.14464545529335737,
+          "step_p95_ms": 0.21809521131217474,
+          "steps_over_1ms": 0,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 135
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.2514382090885192,
+          "step_median_ms": 0.16391649842262268,
+          "step_p95_ms": 0.29988511232659215,
+          "steps_over_1ms": 18,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.46225379197858274,
+          "step_median_ms": 0.26866712141782045,
+          "step_p95_ms": 0.9080123971216371,
+          "steps_over_1ms": 45,
+          "points": 67000,
+          "messages": 10,
+          "ngeom": 135
+        }
+      ]
+    },
+    {
+      "clutter": true,
+      "speed_m_s": 0.1,
+      "sensors": 2,
+      "stride": 1,
+      "rays": 200,
+      "runs": [
+        {
+          "mode": "grouped",
+          "wall_s": 0.5312872498761863,
+          "step_median_ms": 0.4288959316909313,
+          "step_p95_ms": 0.6245932658202944,
+          "steps_over_1ms": 17,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.8513994999229908,
+          "step_median_ms": 0.8234163979068398,
+          "step_p95_ms": 1.0338139953091738,
+          "steps_over_1ms": 79,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 1.2336555421352386,
+          "step_median_ms": 1.060978858731687,
+          "step_p95_ms": 1.6605247161351142,
+          "steps_over_1ms": 679,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 135
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.8025891671422869,
+          "step_median_ms": 0.440603937022388,
+          "step_p95_ms": 1.1537733254954212,
+          "steps_over_1ms": 60,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 135
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.6167006250470877,
+          "step_median_ms": 0.4581453977152705,
+          "step_p95_ms": 1.1706978315487502,
+          "steps_over_1ms": 55,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.9478028328157961,
+          "step_median_ms": 0.9177085012197495,
+          "step_p95_ms": 1.1474534869194029,
+          "steps_over_1ms": 259,
+          "points": 400000,
+          "messages": 20,
+          "ngeom": 135
+        }
+      ]
+    },
+    {
+      "clutter": true,
+      "speed_m_s": 0.1,
+      "sensors": 2,
+      "stride": 3,
+      "rays": 67,
+      "runs": [
+        {
+          "mode": "grouped",
+          "wall_s": 0.41215912508778274,
+          "step_median_ms": 0.3047500504180789,
+          "step_p95_ms": 0.4664609907194971,
+          "steps_over_1ms": 13,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 1.1145665829535574,
+          "step_median_ms": 0.5444788839668036,
+          "step_p95_ms": 1.6933419043198141,
+          "steps_over_1ms": 59,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.6052799590397626,
+          "step_median_ms": 0.47462491784244776,
+          "step_p95_ms": 0.6334000150673091,
+          "steps_over_1ms": 8,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 135
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.3408381249755621,
+          "step_median_ms": 0.32062502577900887,
+          "step_p95_ms": 0.4653294570744037,
+          "steps_over_1ms": 5,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 135
+        },
+        {
+          "mode": "grouped",
+          "wall_s": 0.3824421660974622,
+          "step_median_ms": 0.3186046378687024,
+          "step_p95_ms": 0.5677204811945558,
+          "steps_over_1ms": 17,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 135
+        },
+        {
+          "mode": "exact",
+          "wall_s": 0.6344938329420984,
+          "step_median_ms": 0.5101668648421764,
+          "step_p95_ms": 0.6670430302619934,
+          "steps_over_1ms": 18,
+          "points": 134000,
+          "messages": 20,
+          "ngeom": 135
+        }
+      ]
+    }
+  ],
+  "parent_head": "5dff2fb23d8356cef18f9ed6421e33d052e41d31",
+  "measured_source_sha256": {
+    "integrations/python/mid360_sim/mujoco.py": "c261780d1a95c0ae65165fdf2952f7f5f01334698e9166dc0b98dd9eac37fafb",
+    "integrations/python/benchmark_rolling.py": "b3bf9e1bea9abfff90c5dff67f6e2970bf0529b0f4672b7e592d58fe2c967fc3"
+  },
+  "provenance_note": "Measurements from the delegated checkout before parent import-formatting and portable lock-path edits. Adapter query arithmetic is unchanged; original implementation patch retained in local assets.",
+  "precommit_repeat": {
+    "mujoco": "3.7.0",
+    "numpy": "2.5.4",
+    "machine": "macOS-27.0.1-arm64-arm-64bit",
+    "steps": 1000,
+    "dt_s": 0.001,
+    "scope": "physics, capture, rolling query, owned output, 100 ms assembly; no transport",
+    "exact_implementation": "public Python mj_ray per emission, NOT native fused loop",
+    "cases": [
+      {
+        "clutter": false,
+        "speed_m_s": 20.0,
+        "sensors": 1,
+        "stride": 1,
+        "rays": 200,
+        "runs": [
+          {
+            "mode": "grouped",
+            "wall_s": 0.19059870787896216,
+            "step_median_ms": 0.18216646276414394,
+            "step_p95_ms": 0.24379600072279572,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.3008850831538439,
+            "step_median_ms": 0.2897500526160002,
+            "step_p95_ms": 0.3826660569757223,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.2971500421408564,
+            "step_median_ms": 0.2871875185519457,
+            "step_p95_ms": 0.3606415702961385,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 7
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.1863369590137154,
+            "step_median_ms": 0.18122908659279346,
+            "step_p95_ms": 0.2062548184767365,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 7
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.18824941711500287,
+            "step_median_ms": 0.18189556431025267,
+            "step_p95_ms": 0.23251187521964303,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.29991395794786513,
+            "step_median_ms": 0.2886459697037935,
+            "step_p95_ms": 0.37076309090480203,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 7
+          }
+        ]
+      },
+      {
+        "clutter": false,
+        "speed_m_s": 20.0,
+        "sensors": 1,
+        "stride": 3,
+        "rays": 67,
+        "runs": [
+          {
+            "mode": "grouped",
+            "wall_s": 0.17113904189318419,
+            "step_median_ms": 0.16414595302194357,
+            "step_p95_ms": 0.20995762897655365,
+            "steps_over_1ms": 1,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.16738354205153883,
+            "step_median_ms": 0.1599579118192196,
+            "step_p95_ms": 0.22488130489364266,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.16522687510587275,
+            "step_median_ms": 0.16056210733950138,
+            "step_p95_ms": 0.1929125399328768,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 7
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.17041266686283052,
+            "step_median_ms": 0.16379158478230238,
+            "step_p95_ms": 0.2217935398221015,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 7
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.1751457080245018,
+            "step_median_ms": 0.16675004735589027,
+            "step_p95_ms": 0.23347754031419748,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.17026920896023512,
+            "step_median_ms": 0.16118702478706837,
+            "step_p95_ms": 0.22698692046105845,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 7
+          }
+        ]
+      },
+      {
+        "clutter": false,
+        "speed_m_s": 20.0,
+        "sensors": 2,
+        "stride": 1,
+        "rays": 200,
+        "runs": [
+          {
+            "mode": "grouped",
+            "wall_s": 0.3723297498654574,
+            "step_median_ms": 0.35841704811900854,
+            "step_p95_ms": 0.46540223993360996,
+            "steps_over_1ms": 0,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.595578416949138,
+            "step_median_ms": 0.5749164847657084,
+            "step_p95_ms": 0.7116599474102258,
+            "steps_over_1ms": 1,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.5936792080756277,
+            "step_median_ms": 0.5727710667997599,
+            "step_p95_ms": 0.7111627724952995,
+            "steps_over_1ms": 2,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 7
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.36287391697987914,
+            "step_median_ms": 0.35285402555018663,
+            "step_p95_ms": 0.44796218862757076,
+            "steps_over_1ms": 0,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 7
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.34519875003024936,
+            "step_median_ms": 0.3367915051057935,
+            "step_p95_ms": 0.38902699016034603,
+            "steps_over_1ms": 0,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.5283784591592848,
+            "step_median_ms": 0.5206040805205703,
+            "step_p95_ms": 0.5932938889600337,
+            "steps_over_1ms": 0,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 7
+          }
+        ]
+      },
+      {
+        "clutter": false,
+        "speed_m_s": 20.0,
+        "sensors": 2,
+        "stride": 3,
+        "rays": 67,
+        "runs": [
+          {
+            "mode": "grouped",
+            "wall_s": 0.3117369581013918,
+            "step_median_ms": 0.29200001154094934,
+            "step_p95_ms": 0.38445814279839396,
+            "steps_over_1ms": 0,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.28379070898517966,
+            "step_median_ms": 0.2802289091050625,
+            "step_p95_ms": 0.312631216365844,
+            "steps_over_1ms": 0,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.2876004590652883,
+            "step_median_ms": 0.28406199999153614,
+            "step_p95_ms": 0.3186480957083403,
+            "steps_over_1ms": 0,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 7
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.3079774167854339,
+            "step_median_ms": 0.2908124588429928,
+            "step_p95_ms": 0.4115752060897648,
+            "steps_over_1ms": 0,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 7
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.33771875011734664,
+            "step_median_ms": 0.3256249474361539,
+            "step_p95_ms": 0.41621099226176717,
+            "steps_over_1ms": 0,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.32342695794068277,
+            "step_median_ms": 0.31424988992512226,
+            "step_p95_ms": 0.39297745097428544,
+            "steps_over_1ms": 0,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 7
+          }
+        ]
+      },
+      {
+        "clutter": false,
+        "speed_m_s": 0.1,
+        "sensors": 1,
+        "stride": 1,
+        "rays": 200,
+        "runs": [
+          {
+            "mode": "grouped",
+            "wall_s": 0.12466020788997412,
+            "step_median_ms": 0.12231245636940002,
+            "step_p95_ms": 0.1338373520411551,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.26819995790719986,
+            "step_median_ms": 0.26208360213786364,
+            "step_p95_ms": 0.31955435406416655,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.2721075830049813,
+            "step_median_ms": 0.268041854724288,
+            "step_p95_ms": 0.3021756652742623,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 7
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.11476879217661917,
+            "step_median_ms": 0.11145789176225662,
+            "step_p95_ms": 0.12504630722105503,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 7
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.11674795905128121,
+            "step_median_ms": 0.11437502689659595,
+            "step_p95_ms": 0.12654620222747326,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.276820041006431,
+            "step_median_ms": 0.27120811864733696,
+            "step_p95_ms": 0.3332604421302676,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 7
+          }
+        ]
+      },
+      {
+        "clutter": false,
+        "speed_m_s": 0.1,
+        "sensors": 1,
+        "stride": 3,
+        "rays": 67,
+        "runs": [
+          {
+            "mode": "grouped",
+            "wall_s": 0.10688954195939004,
+            "step_median_ms": 0.0960619654506445,
+            "step_p95_ms": 0.12830152409151196,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.1971565829589963,
+            "step_median_ms": 0.18250010907649994,
+            "step_p95_ms": 0.25279375258833164,
+            "steps_over_1ms": 3,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.1705944170244038,
+            "step_median_ms": 0.16695796512067318,
+            "step_p95_ms": 0.20347731187939638,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 7
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.1097110421396792,
+            "step_median_ms": 0.10554096661508083,
+            "step_p95_ms": 0.1202940009534359,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 7
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.10923875006847084,
+            "step_median_ms": 0.10581314563751221,
+            "step_p95_ms": 0.11999998241662979,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.1635417090728879,
+            "step_median_ms": 0.15833298675715923,
+            "step_p95_ms": 0.19458536989986888,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 7
+          }
+        ]
+      },
+      {
+        "clutter": false,
+        "speed_m_s": 0.1,
+        "sensors": 2,
+        "stride": 1,
+        "rays": 200,
+        "runs": [
+          {
+            "mode": "grouped",
+            "wall_s": 0.2363404578063637,
+            "step_median_ms": 0.23037497885525227,
+            "step_p95_ms": 0.2606576890684663,
+            "steps_over_1ms": 0,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.5375096250791103,
+            "step_median_ms": 0.527062569744885,
+            "step_p95_ms": 0.6052685435861349,
+            "steps_over_1ms": 0,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.5249224998988211,
+            "step_median_ms": 0.5168750649318099,
+            "step_p95_ms": 0.5707854870706797,
+            "steps_over_1ms": 0,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 7
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.21784804202616215,
+            "step_median_ms": 0.21362490952014923,
+            "step_p95_ms": 0.2334602177143097,
+            "steps_over_1ms": 0,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 7
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.22312416695058346,
+            "step_median_ms": 0.21556252613663673,
+            "step_p95_ms": 0.24686709512025112,
+            "steps_over_1ms": 0,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.5206513328012079,
+            "step_median_ms": 0.5121249705553055,
+            "step_p95_ms": 0.5876042996533214,
+            "steps_over_1ms": 0,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 7
+          }
+        ]
+      },
+      {
+        "clutter": false,
+        "speed_m_s": 0.1,
+        "sensors": 2,
+        "stride": 3,
+        "rays": 67,
+        "runs": [
+          {
+            "mode": "grouped",
+            "wall_s": 0.19962862506508827,
+            "step_median_ms": 0.19104196690022945,
+            "step_p95_ms": 0.24481931468471874,
+            "steps_over_1ms": 0,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.34572070906870067,
+            "step_median_ms": 0.3116244915872812,
+            "step_p95_ms": 0.5469188792631029,
+            "steps_over_1ms": 1,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.3436232921667397,
+            "step_median_ms": 0.33339555375277996,
+            "step_p95_ms": 0.4165902850218117,
+            "steps_over_1ms": 0,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 7
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.2223050829488784,
+            "step_median_ms": 0.21462503354996443,
+            "step_p95_ms": 0.28462471673265094,
+            "steps_over_1ms": 0,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 7
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.21608287515118718,
+            "step_median_ms": 0.21291652228683233,
+            "step_p95_ms": 0.2497110515832901,
+            "steps_over_1ms": 0,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 7
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.32708429219201207,
+            "step_median_ms": 0.31691708136349916,
+            "step_p95_ms": 0.3875396447256207,
+            "steps_over_1ms": 0,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 7
+          }
+        ]
+      },
+      {
+        "clutter": true,
+        "speed_m_s": 20.0,
+        "sensors": 1,
+        "stride": 1,
+        "rays": 200,
+        "runs": [
+          {
+            "mode": "grouped",
+            "wall_s": 0.5430857499595731,
+            "step_median_ms": 0.5325619131326675,
+            "step_p95_ms": 0.6367811467498541,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.4210303749423474,
+            "step_median_ms": 0.41235401295125484,
+            "step_p95_ms": 0.49026256892830133,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.426761583192274,
+            "step_median_ms": 0.4217915702611208,
+            "step_p95_ms": 0.5008479696698486,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 135
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.5728020421229303,
+            "step_median_ms": 0.5618755239993334,
+            "step_p95_ms": 0.7003954262472688,
+            "steps_over_1ms": 1,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 135
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.5913238329812884,
+            "step_median_ms": 0.5768750561401248,
+            "step_p95_ms": 0.6984435720369219,
+            "steps_over_1ms": 2,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.46211849991232157,
+            "step_median_ms": 0.4515204345807433,
+            "step_p95_ms": 0.5454125232063233,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 135
+          }
+        ]
+      },
+      {
+        "clutter": true,
+        "speed_m_s": 20.0,
+        "sensors": 1,
+        "stride": 3,
+        "rays": 67,
+        "runs": [
+          {
+            "mode": "grouped",
+            "wall_s": 0.5567470409441739,
+            "step_median_ms": 0.5358954658731818,
+            "step_p95_ms": 0.6674607051536441,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.2258974590804428,
+            "step_median_ms": 0.22016698494553566,
+            "step_p95_ms": 0.26664589531719673,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.21377958310768008,
+            "step_median_ms": 0.2082705032080412,
+            "step_p95_ms": 0.26094340719282616,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 135
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.48052749992348254,
+            "step_median_ms": 0.47029147390276194,
+            "step_p95_ms": 0.5602100864052773,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 135
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.4490657919086516,
+            "step_median_ms": 0.4440000047907233,
+            "step_p95_ms": 0.49997111782431597,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.22162620909512043,
+            "step_median_ms": 0.21525006741285324,
+            "step_p95_ms": 0.26525623397901654,
+            "steps_over_1ms": 3,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 135
+          }
+        ]
+      },
+      {
+        "clutter": true,
+        "speed_m_s": 20.0,
+        "sensors": 2,
+        "stride": 1,
+        "rays": 200,
+        "runs": [
+          {
+            "mode": "grouped",
+            "wall_s": 1.1337952080648392,
+            "step_median_ms": 1.118833082728088,
+            "step_p95_ms": 1.3731731683947146,
+            "steps_over_1ms": 807,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.7870130001101643,
+            "step_median_ms": 0.768333557061851,
+            "step_p95_ms": 0.8988187881186603,
+            "steps_over_1ms": 25,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.7678950000554323,
+            "step_median_ms": 0.7516458863392472,
+            "step_p95_ms": 0.8664066321216523,
+            "steps_over_1ms": 16,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 135
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 1.0030810830648988,
+            "step_median_ms": 0.9835624368861318,
+            "step_p95_ms": 1.1843083426356316,
+            "steps_over_1ms": 388,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 135
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 1.0151837500743568,
+            "step_median_ms": 0.9976455476135015,
+            "step_p95_ms": 1.2297587469220161,
+            "steps_over_1ms": 483,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.7718660000246018,
+            "step_median_ms": 0.7556038908660412,
+            "step_p95_ms": 0.8638578932732344,
+            "steps_over_1ms": 16,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 135
+          }
+        ]
+      },
+      {
+        "clutter": true,
+        "speed_m_s": 20.0,
+        "sensors": 2,
+        "stride": 3,
+        "rays": 67,
+        "runs": [
+          {
+            "mode": "grouped",
+            "wall_s": 0.946461166953668,
+            "step_median_ms": 0.9182705543935299,
+            "step_p95_ms": 1.1622162419371305,
+            "steps_over_1ms": 154,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.39235737500712276,
+            "step_median_ms": 0.38270815275609493,
+            "step_p95_ms": 0.47759630251675844,
+            "steps_over_1ms": 0,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.390720458002761,
+            "step_median_ms": 0.37606258410960436,
+            "step_p95_ms": 0.4867142648436129,
+            "steps_over_1ms": 0,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 135
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.9242553750518709,
+            "step_median_ms": 0.9056250564754009,
+            "step_p95_ms": 1.0710393893532455,
+            "steps_over_1ms": 112,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 135
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 1.0108512921724468,
+            "step_median_ms": 0.9624165249988437,
+            "step_p95_ms": 1.3189122080802915,
+            "steps_over_1ms": 382,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.44373525003902614,
+            "step_median_ms": 0.41177088860422373,
+            "step_p95_ms": 0.6197960581630468,
+            "steps_over_1ms": 0,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 135
+          }
+        ]
+      },
+      {
+        "clutter": true,
+        "speed_m_s": 0.1,
+        "sensors": 1,
+        "stride": 1,
+        "rays": 200,
+        "runs": [
+          {
+            "mode": "grouped",
+            "wall_s": 0.19278137502260506,
+            "step_median_ms": 0.17697899602353573,
+            "step_p95_ms": 0.29747248627245415,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.4457023339346051,
+            "step_median_ms": 0.42006256990134716,
+            "step_p95_ms": 0.5816270248033106,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.425552292028442,
+            "step_median_ms": 0.4065625835210085,
+            "step_p95_ms": 0.5576708121225238,
+            "steps_over_1ms": 1,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 135
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.1657991660758853,
+            "step_median_ms": 0.15689607243984938,
+            "step_p95_ms": 0.2242461661808192,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 135
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.17020125011913478,
+            "step_median_ms": 0.16056199092417955,
+            "step_p95_ms": 0.22673610365018246,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.39070758293382823,
+            "step_median_ms": 0.3830420318990946,
+            "step_p95_ms": 0.46588168479502196,
+            "steps_over_1ms": 0,
+            "points": 200000,
+            "messages": 10,
+            "ngeom": 135
+          }
+        ]
+      },
+      {
+        "clutter": true,
+        "speed_m_s": 0.1,
+        "sensors": 1,
+        "stride": 3,
+        "rays": 67,
+        "runs": [
+          {
+            "mode": "grouped",
+            "wall_s": 0.13782854098826647,
+            "step_median_ms": 0.1306250924244523,
+            "step_p95_ms": 0.18106708303093896,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.2074317499063909,
+            "step_median_ms": 0.1951456069946289,
+            "step_p95_ms": 0.2771292463876307,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.21310149994678795,
+            "step_median_ms": 0.1937909983098507,
+            "step_p95_ms": 0.3119704662822187,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 135
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.14876966713927686,
+            "step_median_ms": 0.1347704092040658,
+            "step_p95_ms": 0.23654733086004853,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 135
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.16783958417363465,
+            "step_median_ms": 0.15289592556655407,
+            "step_p95_ms": 0.2660015947185456,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.21566837513819337,
+            "step_median_ms": 0.20362494979053736,
+            "step_p95_ms": 0.29375008307397366,
+            "steps_over_1ms": 0,
+            "points": 67000,
+            "messages": 10,
+            "ngeom": 135
+          }
+        ]
+      },
+      {
+        "clutter": true,
+        "speed_m_s": 0.1,
+        "sensors": 2,
+        "stride": 1,
+        "rays": 200,
+        "runs": [
+          {
+            "mode": "grouped",
+            "wall_s": 0.3938821670599282,
+            "step_median_ms": 0.360916368663311,
+            "step_p95_ms": 0.5945379030890762,
+            "steps_over_1ms": 2,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.8718567499890924,
+            "step_median_ms": 0.8342500077560544,
+            "step_p95_ms": 1.1358793592080472,
+            "steps_over_1ms": 158,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.8325048328842968,
+            "step_median_ms": 0.7992914179340005,
+            "step_p95_ms": 1.0332972393371163,
+            "steps_over_1ms": 65,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 135
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.3466548330616206,
+            "step_median_ms": 0.32662495505064726,
+            "step_p95_ms": 0.4547624150291085,
+            "steps_over_1ms": 0,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 135
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.33711008285172284,
+            "step_median_ms": 0.3193545853719115,
+            "step_p95_ms": 0.46681455569341773,
+            "steps_over_1ms": 0,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.7969949999824166,
+            "step_median_ms": 0.7736458210274577,
+            "step_p95_ms": 0.9597581112757325,
+            "steps_over_1ms": 33,
+            "points": 400000,
+            "messages": 20,
+            "ngeom": 135
+          }
+        ]
+      },
+      {
+        "clutter": true,
+        "speed_m_s": 0.1,
+        "sensors": 2,
+        "stride": 3,
+        "rays": 67,
+        "runs": [
+          {
+            "mode": "grouped",
+            "wall_s": 0.2625440419651568,
+            "step_median_ms": 0.24479161947965622,
+            "step_p95_ms": 0.3727476811036467,
+            "steps_over_1ms": 0,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.40291800000704825,
+            "step_median_ms": 0.37575000897049904,
+            "step_p95_ms": 0.5567122716456652,
+            "steps_over_1ms": 1,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.4427927501965314,
+            "step_median_ms": 0.40589598938822746,
+            "step_p95_ms": 0.6237122695893049,
+            "steps_over_1ms": 0,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 135
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.2927190000191331,
+            "step_median_ms": 0.273833516985178,
+            "step_p95_ms": 0.4111855174414811,
+            "steps_over_1ms": 0,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 135
+          },
+          {
+            "mode": "grouped",
+            "wall_s": 0.2919125407934189,
+            "step_median_ms": 0.26591646019369364,
+            "step_p95_ms": 0.4367436398752029,
+            "steps_over_1ms": 0,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 135
+          },
+          {
+            "mode": "exact",
+            "wall_s": 0.44516249978914857,
+            "step_median_ms": 0.4162709228694439,
+            "step_p95_ms": 0.6000922643579543,
+            "steps_over_1ms": 0,
+            "points": 134000,
+            "messages": 20,
+            "ngeom": 135
+          }
+        ]
+      }
+    ],
+    "source_sha256": {
+      "integrations/python/mid360_sim/mujoco.py": "54c7e7e3e87e4705431921d9ec9246508cdef253c7acec7672db52a595348ee9",
+      "integrations/python/benchmark_rolling.py": "d3f39274b62935e2c10e6d171768b83e7fe773f6d6dc4805d72d501239fa5a4d"
+    }
+  }
+}
