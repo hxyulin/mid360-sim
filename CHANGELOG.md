@@ -6,8 +6,9 @@
 
 - Add explicit shared Isaac rigid-scene snapshots and bounded contiguous
   transform histories, preserving independent sensor motion and flush schedules.
-  Final native acquisition comparisons were approximately 2–3% slower; no
-  pipeline speedup is claimed.
+  Copy inverse matrices directly into retained buffers and batch inverse
+  validation. Native one-sensor acquisition is level with the earlier baseline;
+  two-sensor sharing remains approximately 1.5% slower in the measured workload.
 
 - Add opt-in exact per-emission origins to MuJoCo rolling scans through public
   `mj_ray` calls. Grouped queries remain the default; exact mode can change edge

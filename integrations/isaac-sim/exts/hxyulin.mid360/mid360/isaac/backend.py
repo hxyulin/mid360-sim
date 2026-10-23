@@ -1115,10 +1115,11 @@ class SceneTransformHistory:
                 raise ValueError("singular moving source transform")
             # Retain Gf's double-precision affine inverse, including nested
             # shear/reflection; pose decomposition is not equivalent.
-            inverse = np.array(matrix.GetInverse().GetTranspose(), dtype=np.float32)
-            if not np.isfinite(inverse).all():
-                raise ValueError("nonfinite moving source inverse")
-            destination[index] = inverse
+            # Copy the transposed double view directly into retained float32
+            # storage, avoiding temporary transposed Gf and NumPy matrices.
+            destination[index] = np.asarray(matrix.GetInverse()).T
+        if not np.isfinite(destination).all():
+            raise ValueError("nonfinite moving source inverse")
 
     def capture(self, capture_id):
         """Capture once per explicit identity; matrices use world metres.

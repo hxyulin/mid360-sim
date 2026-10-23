@@ -258,18 +258,22 @@ flush schedules remain independent. Native regressions include actual PhysX
 writeback, near occlusion, nested scale/reflection, removal/recreation and retained
 snapshot ownership. The union-reference comparison differed by at most 5.25 µm.
 
-Final precommit measurements used five alternating warmed acquisition trials on
-an RTX 5090, eight objects and 2,000 distinct 1 ms captures. One-sensor self-capture
-measured 1.352 → 1.379 s (+1.98%); two sensors sharing captures measured
-1.738 → 1.788 s (+2.88%). Baseline and candidate ranges matched exactly. Review
-also fixed invalid source-transform acceptance and stale mesh histories after
-hole/subdivision edits; all final native checks passed.
+A follow-up removes temporary inverse matrices and checks inverse finiteness once
+per capture, retaining all source-transform validation. Against the committed
+shared-history implementation (`9f2fbfa`), five alternating trials measured
+1.411 → 1.390 s for one sensor (1.48% faster) and 1.851 → 1.847 s for two sensors
+(0.22%, effectively flat). A separate paired comparison against the earlier
+`5dff2fb` baseline measured 1.344 → 1.340 s for one-sensor self-capture and
+1.737 → 1.762 s for two sensors sharing captures. The one-sensor regression is
+no longer apparent; two-sensor sharing remains about 1.47% slower.
 
+These RTX 5090 runs used eight objects and 2,000 distinct 1 ms captures. Ranges
+matched exactly. Native geometry, invalid-source and mesh-edit checks passed;
+1,000 affine inverse conversions also matched the previous conversion bits.
 The replay includes USD edits, capture, tracing and owned range readback, excluding
-physics, rendering, XYZ packaging and transport. Small acquisition regressions
-remain; earlier capture-only savings did not carry through this workload. Trials
-were not CPU-pinned, have no confidence intervals, and include one two-sensor
-baseline outlier. GPU upload sharing and AABB gating remain unimplemented.
+physics, rendering, XYZ packaging and transport. Trials were not CPU-pinned and
+have no confidence intervals. Compare pairs within each session; absolute times
+shifted between sessions. GPU upload sharing and AABB gating remain unimplemented.
 [Paired trials, native checks and source provenance](/benchmarks/isaac-shared-history-rtx5090.json)
 record the scope. See [shared capture usage](guide/acquisition.md#explicit-shared-isaac-rigid-captures).
 
